@@ -1,0 +1,1416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>DQE — Duetto Data Quality Engine</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --duetto-green:  #C4FF45;
+    --duetto-dark:   #0E2124;
+    --duetto-mid:    #162A2D;
+    --duetto-navy:   #1A3338;
+    --accent:        #C4FF45;
+    --accent-dim:    #AADE30;
+    --red:           #F04E5E;
+    --red-bg:        #FEE7EA;
+    --amber:         #F59E0B;
+    --amber-bg:      #FEF3C7;
+    --green-ok:      #10B981;
+    --green-bg:      #D1FAE5;
+    --bg:            #F0F2F6;
+    --card:          #FFFFFF;
+    --border:        #E2E8F0;
+    --border-mid:    #CBD5E1;
+    --text:          #0F172A;
+    --text-mid:      #334155;
+    --muted:         #94A3B8;
+    --folio-bg:      #F5F0FF;
+    --folio-border:  #C4B5FD;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Sora', 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  /* ── Nav bar ── */
+  nav {
+    background: var(--duetto-dark);
+    padding: 0 32px;
+    display: flex;
+    align-items: center;
+    gap: 0;
+    height: 56px;
+    border-bottom: 1px solid rgba(196,255,69,.15);
+    position: sticky; top: 0; z-index: 100;
+  }
+
+  .nav-logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    text-decoration: none;
+    margin-right: 40px;
+  }
+
+  .nav-logo-img {
+    height: 28px;
+    width: auto;
+    flex-shrink: 0;
+    filter: brightness(0) invert(1);
+  }
+
+  .nav-badge {
+    background: rgba(196,255,69,.15);
+    color: var(--duetto-green);
+    font-size: .7rem;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    border-radius: 4px;
+    border: 1px solid rgba(196,255,69,.3);
+    margin-left: 2px;
+  }
+
+  .nav-right {
+    margin-left: auto;
+    color: var(--muted);
+    font-size: .8rem;
+  }
+
+  /* ── Page shell ── */
+  .page { max-width: 1400px; margin: 0 auto; padding: 32px 24px; }
+
+  /* ── Upload section ── */
+  .upload-header {
+    margin-bottom: 20px;
+  }
+  .upload-header h1 {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 4px;
+  }
+  .upload-header p {
+    color: var(--muted);
+    font-size: .875rem;
+  }
+
+  .upload-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 28px;
+    box-shadow: 0 1px 4px rgba(0,0,0,.06), 0 4px 16px rgba(0,0,0,.04);
+    margin-bottom: 28px;
+  }
+
+  .drop-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 14px;
+    margin-bottom: 24px;
+  }
+
+  .drop-zone {
+    border: 1.5px dashed var(--border-mid);
+    border-radius: 12px;
+    padding: 22px 16px 18px;
+    text-align: center;
+    cursor: pointer;
+    transition: all .2s;
+    position: relative;
+    background: #FAFBFC;
+  }
+  .drop-zone:hover, .drop-zone.drag-over {
+    border-color: var(--duetto-green);
+    background: rgba(196,255,69,.06);
+  }
+  .drop-zone.has-file {
+    border-color: var(--green-ok);
+    background: var(--green-bg);
+    border-style: solid;
+  }
+  .drop-zone input[type=file] {
+    position: absolute; inset: 0; opacity: 0; cursor: pointer;
+  }
+  .drop-zone .dz-icon {
+    font-size: 1.75rem;
+    margin-bottom: 8px;
+    display: block;
+  }
+  .drop-zone .dz-label {
+    font-size: .85rem;
+    font-weight: 600;
+    color: var(--text-mid);
+    display: block;
+    margin-bottom: 3px;
+    pointer-events: none;
+  }
+  .drop-zone .dz-hint {
+    font-size: .73rem;
+    color: var(--muted);
+    pointer-events: none;
+  }
+  .drop-zone .dz-required {
+    display: inline-block;
+    font-size: .65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    background: #FEF3C7;
+    color: #92400E;
+    border: 1px solid #FDE68A;
+    border-radius: 4px;
+    padding: 1px 6px;
+    margin-bottom: 6px;
+  }
+  .drop-zone .dz-optional {
+    display: inline-block;
+    font-size: .65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    background: #F1F5F9;
+    color: var(--muted);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1px 6px;
+    margin-bottom: 6px;
+  }
+  .drop-zone .dz-filename {
+    font-size: .72rem;
+    color: var(--green-ok);
+    font-weight: 600;
+    margin-top: 6px;
+    word-break: break-all;
+    pointer-events: none;
+  }
+
+  .run-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    max-width: 320px;
+    margin: 0 auto;
+    padding: 13px 32px;
+    background: var(--duetto-green);
+    color: var(--duetto-dark);
+    border: none;
+    border-radius: 10px;
+    font-size: .95rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background .2s, transform .1s;
+    letter-spacing: .01em;
+  }
+  .run-btn:hover:not(:disabled) {
+    background: #AADE30;
+    transform: translateY(-1px);
+  }
+  .run-btn:disabled {
+    background: var(--border-mid);
+    color: var(--muted);
+    cursor: default;
+    transform: none;
+  }
+
+  /* ── Spinner ── */
+  #spinner {
+    display: none;
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--muted);
+  }
+  .spinner-wrap { display: flex; align-items: center; justify-content: center; gap: 14px; }
+  .spinner-ring {
+    width: 36px; height: 36px;
+    border: 3px solid var(--border);
+    border-top-color: var(--duetto-green);
+    border-radius: 50%;
+    animation: spin .75s linear infinite;
+    flex-shrink: 0;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Error ── */
+  .error-box {
+    background: var(--red-bg);
+    border: 1px solid var(--red);
+    color: #9B1C2E;
+    border-radius: 10px;
+    padding: 16px 20px;
+    margin-top: 16px;
+    font-size: .875rem;
+    white-space: pre-wrap;
+  }
+
+  /* ── Report ── */
+  #report { display: none; }
+
+  .report-header {
+    background: var(--duetto-dark);
+    border-radius: 14px;
+    padding: 24px 28px;
+    margin-bottom: 24px;
+    color: #fff;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+  .report-header h2 {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 4px;
+  }
+  .report-header .rh-sub {
+    font-size: .8rem;
+    color: rgba(255,255,255,.5);
+  }
+  .report-header .rh-period {
+    font-size: .78rem;
+    color: var(--duetto-green);
+    font-weight: 600;
+    margin-top: 2px;
+  }
+
+  /* ── Accuracy pills ── */
+  .accuracy-row {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 28px;
+  }
+  .acc-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 18px 24px;
+    min-width: 200px;
+    flex: 1;
+    box-shadow: 0 1px 3px rgba(0,0,0,.05);
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .acc-card .acc-icon {
+    width: 44px; height: 44px;
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.3rem;
+    flex-shrink: 0;
+  }
+  .acc-card.good .acc-icon { background: var(--green-bg); }
+  .acc-card.warn .acc-icon { background: var(--amber-bg); }
+  .acc-card.bad  .acc-icon { background: var(--red-bg); }
+  .acc-card .acc-label {
+    font-size: .72rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    font-weight: 600;
+    margin-bottom: 2px;
+  }
+  .acc-card .acc-value {
+    font-size: 1.7rem;
+    font-weight: 800;
+    line-height: 1;
+  }
+  .acc-card.good .acc-value { color: var(--green-ok); }
+  .acc-card.warn .acc-value { color: var(--amber); }
+  .acc-card.bad  .acc-value { color: var(--red); }
+  .acc-card .acc-sub {
+    font-size: .72rem;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+
+  /* ── Section title ── */
+  .section-label {
+    font-size: .7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    color: var(--muted);
+    margin: 28px 0 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .section-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  /* ── Discrepancy table ── */
+  .table-outer {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 1px 4px rgba(0,0,0,.05);
+  }
+  .table-scroll { overflow-x: auto; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: .8rem;
+    background: var(--card);
+  }
+  thead tr.th-group th {
+    padding: 10px 14px;
+    font-size: .68rem;
+    font-weight: 700;
+    letter-spacing: .07em;
+    text-transform: uppercase;
+    text-align: center;
+    color: rgba(255,255,255,.9);
+  }
+  thead tr.th-group th.th-rooms  { background: #0E2124; }
+  thead tr.th-group th.th-rev    { background: #1A3338; }
+  thead tr.th-group th.th-folio  { background: #162A2D; }
+  thead tr.th-group th.th-meta   { background: #0a1a1c; }
+
+  thead tr.th-cols th {
+    background: #F8FAFC;
+    padding: 8px 12px;
+    font-size: .72rem;
+    font-weight: 600;
+    color: var(--text-mid);
+    text-align: left;
+    border-bottom: 2px solid var(--border);
+    white-space: nowrap;
+  }
+
+  tbody tr {
+    border-bottom: 1px solid var(--border);
+    transition: background .12s;
+  }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: #F8FAFC; }
+  tbody td {
+    padding: 10px 12px;
+    vertical-align: top;
+    color: var(--text-mid);
+  }
+
+  /* badges */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 9px;
+    border-radius: 20px;
+    font-size: .68rem;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  .badge.over    { background: var(--red-bg);    color: #9B1C2E; }
+  .badge.under   { background: var(--amber-bg);  color: #92400E; }
+  .badge.match   { background: var(--green-bg);  color: #065F46; }
+  .badge.hist    { background: #EFF6FF; color: #1D4ED8; }
+  .badge.future  { background: #F0FDF4; color: #166534; }
+
+  .code-tag {
+    display: inline-block;
+    background: #F1F5F9;
+    border: 1px solid var(--border-mid);
+    border-radius: 6px;
+    padding: 2px 8px;
+    font-size: .68rem;
+    font-weight: 700;
+    color: #475569;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    white-space: nowrap;
+  }
+
+  .diff-neg { color: var(--red);    font-weight: 700; }
+  .diff-pos { color: var(--green-ok); font-weight: 700; }
+
+  .contrib-text {
+    font-size: .72rem;
+    color: var(--muted);
+    white-space: pre-wrap;
+    line-height: 1.5;
+  }
+
+  .folio-cell {
+    font-size: .72rem;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    color: #4C1D95;
+  }
+  .folio-match {
+    display: inline-block;
+    background: #EDE9FE;
+    border: 1px solid var(--folio-border);
+    border-radius: 6px;
+    padding: 2px 7px;
+    font-size: .68rem;
+    font-weight: 700;
+    color: #5B21B6;
+    margin-bottom: 4px;
+  }
+
+  /* ── Recommendations ── */
+  .rec-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  /* Arrivals cross-reference */
+  .xref-title { font-size:1rem; font-weight:700; color:var(--duetto-dark); margin:0 0 4px; }
+  .xref-subtitle { font-size:.8rem; color:var(--muted); margin:0 0 12px; }
+  .xref-summary { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:16px; }
+  .xref-badge { padding:6px 14px; border-radius:6px; font-size:.82rem; font-weight:600; }
+  .xref-badge-red   { background:#fee2e2; color:#b91c1c; border:1px solid #fca5a5; }
+  .xref-badge-amber { background:#fef3c7; color:#c2740a; border:1px solid #fcd34d; }
+  .xref-badge-blue  { background:#dbeafe; color:#1d4ed8; border:1px solid #93c5fd; }
+  .xref-badge-green { background:#dcfce7; color:#166534; border:1px solid #86efac; }
+  .xref-section-hdr { font-size:.8rem; font-weight:700; text-transform:uppercase; letter-spacing:.05em;
+                      padding:6px 12px; margin:0; }
+  .xref-hdr-red   { background:#fee2e2; color:#b91c1c; }
+  .xref-hdr-amber { background:#fef3c7; color:#b45309; }
+  .xref-hdr-blue  { background:#dbeafe; color:#1d4ed8; }
+  .xref-table { width:100%; border-collapse:collapse; font-size:.82rem; }
+  .xref-table th { background:var(--duetto-dark); color:#fff; padding:8px 12px; text-align:left; font-weight:600; }
+  .xref-table td { padding:7px 12px; border-bottom:1px solid var(--border); vertical-align:top; }
+  .xref-table tr:last-child td { border-bottom:none; }
+  .xref-missing { color:#b91c1c; font-weight:600; }
+  .xref-extra   { color:#1d4ed8; font-weight:600; }
+  .xref-mismatch { color:#c2740a; font-weight:600; }
+
+  /* ── Stay Date Reconciliation panel ── */
+  .recon-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.05);
+    margin-bottom: 28px;
+  }
+  .recon-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: .85rem;
+  }
+  .recon-table th {
+    text-align: left;
+    padding: 8px 12px;
+    background: #F8FAFC;
+    border-bottom: 2px solid var(--border);
+    font-size: .72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--text-mid);
+  }
+  .recon-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+  }
+  .recon-table tr:last-child td { border-bottom: none; }
+  .recon-row-opera td { color: var(--text-mid); }
+  .recon-row-duetto td { color: var(--green-ok); font-weight: 600; }
+  .recon-row-dva td { color: var(--amber); font-weight: 600; }
+  .recon-row-dva-bad td { color: var(--red); font-weight: 600; }
+  .recon-gap-note {
+    margin-top: 14px;
+    font-size: .85rem;
+    color: var(--amber);
+    font-weight: 600;
+  }
+
+  .rec-item {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--duetto-green);
+    border-radius: 0 10px 10px 0;
+    padding: 14px 18px;
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    box-shadow: 0 1px 3px rgba(0,0,0,.04);
+  }
+  .rec-code {
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: .72rem;
+    font-weight: 700;
+    color: var(--duetto-dark);
+    background: var(--duetto-green);
+    border-radius: 6px;
+    padding: 3px 8px;
+    white-space: nowrap;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+  .rec-text { font-size: .85rem; color: var(--text-mid); line-height: 1.5; }
+
+  /* ── Download button ── */
+  .dl-row { margin-top: 28px; display: flex; gap: 12px; flex-wrap: wrap; }
+  .dl-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 11px 24px;
+    background: #1D6F42;
+    color: #fff;
+    border: none;
+    border-radius: 9px;
+    font-size: .875rem;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+    transition: background .2s;
+  }
+  .dl-btn:hover { background: #155534; }
+
+  /* Monday submit button */
+  .monday-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 11px 24px;
+    background: var(--duetto-dark);
+    color: var(--duetto-green);
+    border: 1.5px solid var(--duetto-green);
+    border-radius: 9px;
+    font-size: .875rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background .2s;
+  }
+  .monday-btn:hover { background: rgba(196,255,69,.1); }
+
+  /* ── Modal ── */
+  .modal-overlay {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,.55);
+    z-index: 200;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal-box {
+    background: #fff;
+    border-radius: 16px;
+    padding: 32px;
+    width: 100%;
+    max-width: 540px;
+    box-shadow: 0 20px 60px rgba(0,0,0,.25);
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+  .modal-box h3 {
+    font-size: 1.1rem;
+    font-weight: 700;
+    margin-bottom: 4px;
+    color: var(--text);
+  }
+  .modal-box .modal-sub {
+    font-size: .8rem;
+    color: var(--muted);
+    margin-bottom: 20px;
+  }
+  .form-row { margin-bottom: 14px; }
+  .form-row label {
+    display: block;
+    font-size: .75rem;
+    font-weight: 600;
+    color: var(--text-mid);
+    margin-bottom: 5px;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+  }
+  .form-row input, .form-row textarea {
+    width: 100%;
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    padding: 9px 12px;
+    font-size: .875rem;
+    font-family: inherit;
+    color: var(--text);
+    background: #FAFBFC;
+    outline: none;
+    transition: border-color .15s;
+  }
+  .form-row input:focus, .form-row textarea:focus {
+    border-color: var(--duetto-green);
+    background: #fff;
+  }
+  .form-row textarea { resize: vertical; min-height: 80px; }
+  .form-row.readonly input {
+    background: #F1F5F9;
+    color: var(--muted);
+    cursor: default;
+  }
+  .modal-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+    justify-content: flex-end;
+  }
+  .modal-cancel {
+    padding: 10px 20px;
+    background: transparent;
+    border: 1.5px solid var(--border-mid);
+    border-radius: 8px;
+    font-size: .875rem;
+    font-weight: 600;
+    cursor: pointer;
+    color: var(--text-mid);
+  }
+  .modal-submit {
+    padding: 10px 24px;
+    background: var(--duetto-dark);
+    color: var(--duetto-green);
+    border: none;
+    border-radius: 8px;
+    font-size: .875rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: opacity .2s;
+  }
+  .modal-submit:disabled { opacity: .5; cursor: default; }
+  .modal-success {
+    text-align: center;
+    padding: 20px 0;
+  }
+  .modal-success .success-icon { font-size: 2.5rem; margin-bottom: 10px; }
+  .modal-success p { color: var(--text-mid); font-size: .9rem; }
+</style>
+</head>
+<body>
+
+<!-- ── Navigation ── -->
+<nav>
+  <a href="/" class="nav-logo">
+    <img src="/static/duetto-logo.png" alt="Duetto" class="nav-logo-img"/>
+    <span class="nav-badge">DQE</span>
+  </a>
+  <span class="nav-right" id="today-label"></span>
+</nav>
+
+<!-- ── Main page ── -->
+<div class="page">
+
+  <!-- Upload section -->
+  <div class="upload-header">
+    <h1>Data Quality Engine</h1>
+    <p>Upload your DVA and Duetto export files to identify and root-cause discrepancies between Duetto and your PMS.</p>
+  </div>
+
+  <div class="upload-card">
+    <div class="drop-grid">
+
+      <div class="drop-zone" id="zone-comp">
+        <input type="file" id="file-comp" accept=".xlsx,.xls"/>
+        <span class="dz-required">Required</span>
+        <span class="dz-icon">📊</span>
+        <span class="dz-label">DVA File</span>
+        <span class="dz-hint">.xlsx · Duetto Data Validation results</span>
+        <div class="dz-filename" id="name-comp"></div>
+      </div>
+
+      <div class="drop-zone" id="zone-res">
+        <input type="file" id="file-res" accept=".tsv,.csv,.txt"/>
+        <span class="dz-optional">Optional</span>
+        <span class="dz-icon">🛎️</span>
+        <span class="dz-label">Bookings Report</span>
+        <span class="dz-hint">.tsv / .csv · Duetto flat bookings export</span>
+        <div class="dz-filename" id="name-res"></div>
+      </div>
+
+      <div class="drop-zone" id="zone-blk">
+        <input type="file" id="file-blk" accept=".tsv,.csv,.txt"/>
+        <span class="dz-optional">Optional</span>
+        <span class="dz-icon">🏨</span>
+        <span class="dz-label">Blocks Report</span>
+        <span class="dz-hint">.tsv / .csv · Duetto flat blocks export</span>
+        <div class="dz-filename" id="name-blk"></div>
+      </div>
+
+      <div class="drop-zone" id="zone-folio">
+        <input type="file" id="file-folio" accept=".tsv,.csv,.txt"/>
+        <span class="dz-optional">Optional</span>
+        <span class="dz-icon">🧾</span>
+        <span class="dz-label">Folio Report</span>
+        <span class="dz-hint">.tsv / .csv · Duetto flat folio export</span>
+        <div class="dz-filename" id="name-folio"></div>
+      </div>
+
+      <div class="drop-zone" id="zone-arrivals">
+        <input type="file" id="file-arrivals" accept=".xml,.pdf,.txt"/>
+        <span class="dz-optional">Optional</span>
+        <span class="dz-icon">📋</span>
+        <span class="dz-label">Arrival Details Report</span>
+        <span class="dz-hint">.xml, .pdf or .txt · Opera arrivals export</span>
+        <div class="dz-filename" id="name-arrivals"></div>
+      </div>
+
+    </div>
+
+    <button class="run-btn" id="run-btn" disabled>
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 2.5l10 5.5-10 5.5V2.5z" fill="currentColor"/></svg>
+      Run Analysis
+    </button>
+  </div>
+
+  <div id="spinner">
+    <div class="spinner-wrap">
+      <div class="spinner-ring"></div>
+      <span>Analysing data, please wait…</span>
+    </div>
+  </div>
+
+  <div id="error-container"></div>
+
+  <!-- ── Report ── -->
+  <div id="report">
+
+    <div class="report-header">
+      <div>
+        <h2 id="report-title">—</h2>
+        <div class="rh-sub" id="report-sub">—</div>
+        <div class="rh-period" id="report-period"></div>
+      </div>
+    </div>
+
+    <!-- Accuracy cards -->
+    <div class="section-label">Overall Accuracy</div>
+    <div class="accuracy-row">
+      <div class="acc-card" id="card-rooms">
+        <div class="acc-icon">🛏️</div>
+        <div>
+          <div class="acc-label">Rooms Commit Accuracy</div>
+          <div class="acc-value" id="val-rooms">—</div>
+          <div class="acc-sub" id="sub-rooms">—</div>
+        </div>
+      </div>
+      <div class="acc-card" id="card-rev">
+        <div class="acc-icon">💰</div>
+        <div>
+          <div class="acc-label">Room Revenue Accuracy</div>
+          <div class="acc-value" id="val-rev">—</div>
+          <div class="acc-sub" id="sub-rev">—</div>
+        </div>
+      </div>
+      <div class="acc-card" id="card-xref" style="display:none">
+        <div class="acc-icon">🔗</div>
+        <div>
+          <div class="acc-label">Bookings vs Arrivals</div>
+          <div class="acc-value" id="val-xref">—</div>
+          <div class="acc-sub" id="sub-xref">—</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Stay Date Reconciliation panel (shown only when arrivals data present) -->
+    <div id="recon-panel" style="display:none">
+      <div class="section-label">Stay Date Reconciliation</div>
+      <div class="recon-card">
+        <table class="recon-table">
+          <thead>
+            <tr>
+              <th>Source</th>
+              <th>Rooms</th>
+              <th>vs Opera</th>
+            </tr>
+          </thead>
+          <tbody id="recon-tbody"></tbody>
+        </table>
+        <div class="recon-gap-note" id="recon-gap-note" style="display:none"></div>
+      </div>
+    </div>
+
+    <!-- Discrepancy table -->
+    <div class="section-label">Discrepancy Detail by Stay Date</div>
+    <div class="table-outer">
+      <div class="table-scroll">
+        <table id="disc-table">
+          <thead>
+            <tr class="th-group">
+              <th class="th-meta" colspan="2">DATE</th>
+              <th class="th-rooms" colspan="7">ROOMS COMMIT</th>
+              <th class="th-rev"   colspan="7">ROOM REVENUE</th>
+              <th class="th-folio" colspan="1">FOLIO ANALYSIS</th>
+            </tr>
+            <tr class="th-cols">
+              <th>Stay Date</th>
+              <th>Period</th>
+              <th>Status</th><th>Duetto</th><th>PMS</th><th>Diff</th><th>Code</th><th>Explanation</th><th>Bookings</th>
+              <th>Status</th><th>Duetto</th><th>PMS</th><th>Diff</th><th>Code</th><th>Explanation</th><th>Bookings</th>
+              <th>Unmapped Codes</th>
+            </tr>
+          </thead>
+          <tbody id="disc-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Arrivals cross-reference -->
+    <div id="arrivals-xref-section" style="display:none;margin-bottom:24px"></div>
+
+    <!-- Recommendations -->
+    <div class="section-label">Consultant Recommendations</div>
+    <div class="rec-grid" id="rec-list"></div>
+
+    <div class="dl-row">
+      <a class="dl-btn" id="dl-btn2" href="#" download="report.xlsx">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 1v8M4 6l3 3 3-3M2 11h10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Download Excel Report
+      </a>
+      <button class="monday-btn" id="monday-btn" onclick="openMondayModal()">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2" y="5" width="3" height="7" rx="1.5" fill="#F04E5E"/><rect x="6.5" y="2" width="3" height="10" rx="1.5" fill="#FFCB00"/><rect x="11" y="5" width="3" height="7" rx="1.5" fill="#00CA72"/></svg>
+        Submit to Monday
+      </button>
+    </div>
+
+  </div><!-- /report -->
+
+</div><!-- /page -->
+
+<!-- ── Monday.com Submit Modal ── -->
+<div class="modal-overlay" id="monday-modal">
+  <div class="modal-box">
+    <div id="modal-form-content">
+      <h3>Submit to Monday.com</h3>
+      <p class="modal-sub">Add hotel details and feedback — the analysis results and Excel report will be attached automatically.</p>
+
+      <div class="form-row">
+        <label>Submitted By</label>
+        <select id="m-submitted-by" style="width:100%;border:1.5px solid var(--border);border-radius:8px;padding:9px 12px;font-size:.875rem;font-family:inherit;color:var(--text);background:#FAFBFC;outline:none;">
+          <option value="">Loading team…</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label>Hotel Name</label>
+        <input type="text" id="m-hotel-name" placeholder="e.g. Chesterfield Hotel & Suites"/>
+      </div>
+      <div class="form-row">
+        <label>Hotel ID</label>
+        <input type="text" id="m-hotel-id" placeholder="e.g. ho669921"/>
+      </div>
+      <div class="form-row readonly">
+        <label>Stay Date Range (auto-filled)</label>
+        <input type="text" id="m-stay-range" readonly/>
+      </div>
+      <div class="form-row readonly">
+        <label>Rooms Accuracy % (auto-filled)</label>
+        <input type="text" id="m-rooms-acc" readonly/>
+      </div>
+      <div class="form-row readonly">
+        <label>Revenue Accuracy % (auto-filled)</label>
+        <input type="text" id="m-rev-acc" readonly/>
+      </div>
+      <div class="form-row readonly">
+        <label>Failing Dates (auto-filled)</label>
+        <input type="text" id="m-failing" readonly/>
+      </div>
+      <div class="form-row readonly">
+        <label>Files Used (auto-filled)</label>
+        <input type="text" id="m-files" readonly/>
+      </div>
+      <div class="form-row">
+        <label>Feedback / Notes</label>
+        <textarea id="m-feedback" placeholder="Any observations, follow-up actions, or notes for the team..."></textarea>
+      </div>
+
+      <div id="modal-error" style="display:none; color:#9B1C2E; font-size:.8rem; margin-top:8px;"></div>
+
+      <div class="modal-actions">
+        <button class="modal-cancel" onclick="closeMondayModal()">Cancel</button>
+        <button class="modal-submit" id="modal-submit-btn" onclick="submitToMonday()">Submit</button>
+      </div>
+    </div>
+
+    <div id="modal-success-content" class="modal-success" style="display:none">
+      <div class="success-icon">✅</div>
+      <h3>Submitted!</h3>
+      <p>Your analysis has been posted to the <strong>DQE Feedback</strong> board on Monday.com.</p>
+      <div class="modal-actions" style="justify-content:center; margin-top:16px;">
+        <button class="modal-cancel" onclick="closeMondayModal()">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Date label
+  document.getElementById('today-label').textContent =
+    new Date().toLocaleDateString('en-GB', { weekday:'short', day:'numeric', month:'long', year:'numeric' });
+
+  // File zones
+  const zones = [
+    { zone: 'zone-comp',  input: 'file-comp',  label: 'name-comp',  required: true  },
+    { zone: 'zone-res',   input: 'file-res',   label: 'name-res',   required: false },
+    { zone: 'zone-blk',   input: 'file-blk',   label: 'name-blk',   required: false },
+    { zone: 'zone-folio',    input: 'file-folio',    label: 'name-folio',    required: false },
+    { zone: 'zone-arrivals', input: 'file-arrivals', label: 'name-arrivals', required: false },
+  ];
+
+  zones.forEach(({ zone, input, label }) => {
+    const zEl = document.getElementById(zone);
+    const iEl = document.getElementById(input);
+    const lEl = document.getElementById(label);
+
+    iEl.addEventListener('change', () => {
+      lEl.textContent = iEl.files[0] ? '✓ ' + iEl.files[0].name : '';
+      zEl.classList.toggle('has-file', !!iEl.files[0]);
+      checkReady();
+    });
+    zEl.addEventListener('dragover',  e => { e.preventDefault(); zEl.classList.add('drag-over'); });
+    zEl.addEventListener('dragleave', ()  => zEl.classList.remove('drag-over'));
+    zEl.addEventListener('drop', e => {
+      e.preventDefault();
+      zEl.classList.remove('drag-over');
+      const file = e.dataTransfer.files[0];
+      if (!file) return;
+      const dt = new DataTransfer(); dt.items.add(file); iEl.files = dt.files;
+      lEl.textContent = '✓ ' + file.name;
+      zEl.classList.add('has-file');
+      checkReady();
+    });
+  });
+
+  function checkReady() {
+    document.getElementById('run-btn').disabled = !document.getElementById('file-comp').files[0];
+  }
+
+  // Run
+  document.getElementById('run-btn').addEventListener('click', async () => {
+    document.getElementById('error-container').innerHTML = '';
+    document.getElementById('report').style.display = 'none';
+    document.getElementById('spinner').style.display = 'block';
+    document.getElementById('run-btn').disabled = true;
+
+    const fd = new FormData();
+    fd.append('comparison', document.getElementById('file-comp').files[0]);
+    const r = document.getElementById('file-res').files[0];
+    const b = document.getElementById('file-blk').files[0];
+    const f = document.getElementById('file-folio').files[0];
+    const a = document.getElementById('file-arrivals').files[0];
+    if (r) fd.append('reservations', r);
+    if (b) fd.append('blocks', b);
+    if (f) fd.append('folio', f);
+    if (a) fd.append('arrivals', a);
+
+    try {
+      const resp = await fetch('/analyze', { method: 'POST', body: fd });
+      const data = await resp.json();
+      document.getElementById('spinner').style.display = 'none';
+      document.getElementById('run-btn').disabled = false;
+
+      if (data.error) {
+        document.getElementById('error-container').innerHTML =
+          `<div class="error-box"><strong>Error:</strong> ${escHtml(data.error)}\n\n${escHtml(data.trace||'')}</div>`;
+        return;
+      }
+      window._lastResult = data;  // includes session_id for Monday file uploads
+      renderReport(data);
+    } catch(e) {
+      document.getElementById('spinner').style.display = 'none';
+      document.getElementById('run-btn').disabled = false;
+      document.getElementById('error-container').innerHTML =
+        `<div class="error-box">${escHtml(e.message)}</div>`;
+    }
+  });
+
+  function accClass(v) { return v >= 97 ? 'good' : v >= 90 ? 'warn' : 'bad'; }
+
+  function renderReport(data) {
+    // Header
+    document.getElementById('report-title').textContent =
+      `${data.hotel_name} — Duetto vs. PMS Accuracy Review`;
+    document.getElementById('report-sub').textContent =
+      `Analysis run on ${data.analysis_date}  ·  ${data.total_days} day(s) in scope`;
+    document.getElementById('report-period').textContent =
+      data.date_range ? `Period: ${data.date_range}` : '';
+
+    // Accuracy cards
+    [['rooms', data.room_accuracy, data.total_days], ['rev', data.rev_accuracy, data.total_days]].forEach(([key, val, days]) => {
+      const failDays = Math.round((1 - val/100) * days);
+      const card = document.getElementById(`card-${key}`);
+      card.className = `acc-card ${accClass(val)}`;
+      document.getElementById(`val-${key}`).textContent = `${val.toFixed(1)}%`;
+      document.getElementById(`sub-${key}`).textContent =
+        failDays === 0 ? 'All days match' : `${failDays} day${failDays!==1?'s':''} with discrepancies`;
+    });
+
+    // Bookings vs Arrivals card
+    const xrefSummary = data.arrivals_xref && data.arrivals_xref['__summary__'];
+    const xrefCard = document.getElementById('card-xref');
+    if (xrefSummary) {
+      const allMatch = xrefSummary.missing_in_duetto === 0 && xrefSummary.extra_in_duetto === 0;
+      const discCount = xrefSummary.missing_in_duetto + xrefSummary.extra_in_duetto;
+      const pmsDiff = (xrefSummary.dva_pms_total != null)
+        ? xrefSummary.opera_total - xrefSummary.dva_pms_total : null;
+      const hasGap = pmsDiff !== null && pmsDiff !== 0;
+
+      // If bookings match but DVA PMS differs — warn; if bookings mismatch — bad
+      const state = !allMatch ? 'bad' : hasGap ? 'warn' : 'good';
+      xrefCard.className = `acc-card ${state}`;
+      document.getElementById('val-xref').textContent = allMatch
+        ? `${xrefSummary.matched} / ${xrefSummary.opera_total}`
+        : `${discCount} gap${discCount !== 1 ? 's' : ''}`;
+
+      let sub = allMatch ? 'Opera & Duetto agree' : `${xrefSummary.missing_in_duetto} missing · ${xrefSummary.extra_in_duetto} extra`;
+      if (hasGap) sub += ` · DVA PMS shows ${xrefSummary.dva_pms_total} (${pmsDiff > 0 ? '+' : ''}${pmsDiff} vs Opera)`;
+      document.getElementById('sub-xref').textContent = sub;
+      xrefCard.style.display = 'flex';
+
+      // Also inject a callout banner below the accuracy row when PMS gap exists
+      const existingBanner = document.getElementById('pms-gap-banner');
+      if (existingBanner) existingBanner.remove();
+      if (hasGap) {
+        const banner = document.createElement('div');
+        banner.id = 'pms-gap-banner';
+        banner.style.cssText = 'background:#fef3c7;border:1px solid #fcd34d;border-radius:10px;padding:14px 18px;margin-bottom:20px;font-size:.85rem;line-height:1.5';
+        banner.innerHTML = `<strong style="color:#92400e">⚠ PMS Integration Gap Detected</strong><br>
+          Opera Arrivals &amp; Duetto Bookings both show <strong>${xrefSummary.opera_total}</strong> reservations for this stay date,
+          but the DVA records only <strong>${xrefSummary.dva_pms_total}</strong> rooms from the PMS commit
+          — a gap of <strong>${Math.abs(pmsDiff)}</strong> rooms.
+          This is consistent with an incomplete OHIP sync feed vs the full manual Opera export.`;
+        const xrefSection = document.getElementById('arrivals-xref-section');
+        xrefSection.parentNode.insertBefore(banner, xrefSection);
+      }
+    } else {
+      xrefCard.style.display = 'none';
+    }
+
+    // Reframe rooms commit card when arrivals data confirms sync gap
+    if (xrefSummary &&
+        xrefSummary.opera_total === xrefSummary.duetto_total &&
+        xrefSummary.dva_pms_total != null &&
+        xrefSummary.dva_pms_total !== xrefSummary.opera_total) {
+      const gap = xrefSummary.dva_pms_total - xrefSummary.opera_total; // negative = under-sync
+      document.getElementById('val-rooms').textContent = `${gap > 0 ? '+' : ''}${gap} rooms`;
+      document.getElementById('sub-rooms').textContent = 'DVA PMS sync gap — Opera & Duetto agree';
+      document.getElementById('card-rooms').className = 'acc-card warn';
+    }
+
+    // Stay Date Reconciliation panel
+    const reconPanel = document.getElementById('recon-panel');
+    const reconTbody = document.getElementById('recon-tbody');
+    const reconGapNote = document.getElementById('recon-gap-note');
+    if (xrefSummary) {
+      const operaTotal  = xrefSummary.opera_total;
+      const duettoTotal = xrefSummary.duetto_total;
+      const dvaTotal    = xrefSummary.dva_pms_total;
+
+      const duettoMatch = duettoTotal === operaTotal;
+      const dvaGap      = dvaTotal != null ? operaTotal - dvaTotal : null;
+      const dvaMatch    = dvaGap === 0;
+
+      reconTbody.innerHTML = `
+        <tr class="recon-row-opera">
+          <td>Opera Arrivals (PMS)</td>
+          <td><strong>${operaTotal}</strong></td>
+          <td style="color:var(--muted)">—</td>
+        </tr>
+        <tr class="${duettoMatch ? 'recon-row-duetto' : 'recon-row-dva-bad'}">
+          <td>Duetto Bookings</td>
+          <td><strong>${duettoTotal}</strong></td>
+          <td>${duettoMatch ? '✓ Match' : `⚠ ${duettoTotal > operaTotal ? '+' : ''}${duettoTotal - operaTotal} gap`}</td>
+        </tr>
+        ${dvaTotal != null ? `<tr class="${dvaMatch ? 'recon-row-duetto' : 'recon-row-dva'}">
+          <td>DVA PMS Commit</td>
+          <td><strong>${dvaTotal}</strong></td>
+          <td>${dvaMatch ? '✓ Match' : `⚠ ${dvaGap > 0 ? '−' : '+'}${Math.abs(dvaGap)} gap`}</td>
+        </tr>` : ''}
+      `;
+
+      if (dvaTotal != null && !dvaMatch) {
+        reconGapNote.textContent = `⚠ ${Math.abs(dvaGap)} rooms not synced via OHIP`;
+        reconGapNote.style.display = 'block';
+      } else {
+        reconGapNote.style.display = 'none';
+      }
+
+      reconPanel.style.display = 'block';
+    } else {
+      reconPanel.style.display = 'none';
+    }
+
+    // Table
+    const tbody = document.getElementById('disc-tbody');
+    tbody.innerHTML = '';
+
+    if (!data.discrepancies.length) {
+      tbody.innerHTML = `<tr><td colspan="17" style="text-align:center;padding:32px;color:var(--muted);">
+        <div style="font-size:1.5rem;margin-bottom:8px">🎉</div>No discrepancies found in the scoped date range.</td></tr>`;
+    } else {
+      data.discrepancies.forEach(d => {
+        const hasRoomFail = Math.abs(d.RoomDiff) > 0;
+        const hasRevFail  = Math.abs(d.RevDiff)  > 10;
+        const tr = document.createElement('tr');
+
+        const syncGap = d.SyncGapConfirmed === true;
+        const roomStatus = !hasRoomFail
+          ? `<span class="badge match">✓ Match</span>`
+          : syncGap
+            ? `<span class="badge" style="background:#fef3c7;color:#92400e;border:1px solid #fcd34d">⚠ Sync Gap</span>`
+            : `<span class="badge ${d.RoomDiff>0?'over':'under'}">${d.RoomDiff>0?'▲ Over':'▼ Under'}</span>`;
+        const revStatus  = hasRevFail
+          ? `<span class="badge ${d.RevDiff>0?'over':'under'}">${d.RevDiff>0?'▲ Over':'▼ Under'}</span>`
+          : (hasRevFail===false && d.DuettoRev ? `<span class="badge match">✓ Match</span>` : '');
+
+        const folioHtml = d.FolioSummary
+          ? `<span class="folio-cell">${formatFolio(d.FolioSummary)}</span>`
+          : `<span style="color:var(--muted);font-size:.75rem">No folio data</span>`;
+
+        const rowBg = syncGap ? 'background:#fffbeb' : '';
+
+        tr.innerHTML = `
+          <td style="font-weight:600;white-space:nowrap;${rowBg}">${d.StayDate}</td>
+          <td style="${rowBg}"><span class="badge ${d.Period==='HISTORIC'?'hist':'future'}">${d.Period==='HISTORIC'?'Hist':'Future'}</span></td>
+          <td style="${rowBg}">${roomStatus}</td>
+          <td style="${rowBg}">${d.DuettoRooms}</td>
+          <td style="${rowBg}">${d.PMSRooms}</td>
+          <td class="${hasRoomFail?(syncGap?'':'diff-pos'):''}" style="${rowBg}">${d.RoomDiff>0?'+':''}${d.RoomDiff}</td>
+          <td style="${rowBg}">${hasRoomFail?`<span class="code-tag" style="${syncGap?'background:#fef3c7;color:#92400e;border-color:#fcd34d':''}">${d.RoomCode}</span>`:''}</td>
+          <td style="min-width:180px;max-width:260px;${rowBg}">${escHtml(hasRoomFail?d.RoomExpl:'')}</td>
+          <td style="min-width:140px;${rowBg}"><span class="contrib-text">${escHtml(hasRoomFail?d.RoomContrib:'')}</span></td>
+          <td>${revStatus}</td>
+          <td>${hasRevFail?fmt(d.DuettoRev):''}</td>
+          <td>${hasRevFail?fmt(d.PMSRev):''}</td>
+          <td class="${hasRevFail?(d.RevDiff>0?'diff-pos':'diff-neg'):''}">${hasRevFail?(d.RevDiff>0?'+':'')+fmt(Math.abs(d.RevDiff)):''}</td>
+          <td>${hasRevFail?`<span class="code-tag">${d.RevCode}</span>`:''}</td>
+          <td style="min-width:180px;max-width:260px">${escHtml(hasRevFail?d.RevExpl:'')}</td>
+          <td style="min-width:140px"><span class="contrib-text">${escHtml(hasRevFail?d.RevContrib:'')}</span></td>
+          <td style="min-width:220px;background:var(--folio-bg)">${folioHtml}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    // Recommendations
+    const recList = document.getElementById('rec-list');
+    recList.innerHTML = '';
+    (data.recommendations || []).forEach(r => {
+      const m = r.match(/^\[([^\]]+)\]\s*(?:\(\d[^)]*\))?:?\s*(.*)/s);
+      const code = m ? m[1] : '';
+      const text = m ? m[2].trim() : r;
+      const div = document.createElement('div');
+      div.className = 'rec-item';
+      div.innerHTML = `<span class="rec-code">${escHtml(code)}</span><span class="rec-text">${escHtml(text)}</span>`;
+      recList.appendChild(div);
+    });
+
+    // Arrivals cross-reference section
+    const xrefSection = document.getElementById('arrivals-xref-section');
+    const xref = data.arrivals_xref || {};
+    const summary = xref['__summary__'];
+
+    if (summary) {
+      const xrefDates = Object.keys(xref).filter(k => k !== '__summary__').sort();
+      const clean = summary.missing_in_duetto === 0 && summary.extra_in_duetto === 0;
+
+      // Summary row — always shown
+      let html = `<div class="xref-summary">`;
+      html += `<span class="xref-badge xref-badge-blue">${summary.opera_total} Opera Arrivals</span>`;
+      html += `<span class="xref-badge xref-badge-blue">${summary.duetto_total} Duetto Bookings</span>`;
+      html += `<span class="xref-badge ${clean ? 'xref-badge-green' : 'xref-badge-red'}">${summary.matched} Matched</span>`;
+      if (summary.rate_mismatches > 0)
+        html += `<span class="xref-badge xref-badge-amber">${summary.rate_mismatches} Rate Mismatches</span>`;
+      html += `</div>`;
+
+      if (clean && summary.rate_mismatches === 0) {
+        html += `<p style="color:#166534;font-weight:600;font-size:.9rem;margin:0">
+          ✓ All ${summary.matched} reservations present in both reports with no rate discrepancies.</p>`;
+      } else if (clean) {
+        html += `<p style="color:#166534;font-weight:600;font-size:.9rem;margin:0 0 12px">
+          ✓ All ${summary.matched} reservations present in both reports — ${summary.rate_mismatches} rate discrepancies found below.</p>`;
+      }
+
+      // Rate mismatches table
+      const totalMismatch = xrefDates.reduce((n, dt) => n + (xref[dt].mismatches || []).length, 0);
+      if (totalMismatch > 0) {
+        html += `<p class="xref-section-hdr xref-hdr-amber" style="margin-top:14px">Rate Mismatches (matched by Confirmation #)</p>`;
+        html += `<table class="xref-table"><thead><tr>
+          <th>Stay Date</th><th>Confirmation #</th><th>Room Type</th><th>Opera Rate</th><th>Duetto Rate</th><th>Diff</th>
+        </tr></thead><tbody>`;
+        xrefDates.forEach(dt => {
+          (xref[dt].mismatches || []).forEach(m => {
+            const diff = Number(m.diff);
+            html += `<tr><td>${escHtml(dt)}</td><td class="xref-mismatch">${escHtml(m.confirmation_no)}</td>
+              <td>${escHtml(m.room_category)}</td><td>${Number(m.opera_rate).toFixed(2)}</td>
+              <td>${Number(m.duetto_rate).toFixed(2)}</td>
+              <td class="xref-mismatch">${diff > 0 ? '+' : ''}${diff.toFixed(2)}</td></tr>`;
+          });
+        });
+        html += `</tbody></table>`;
+      }
+
+      xrefSection.innerHTML = `
+        <h3 class="xref-title">Arrival Details Cross-Reference</h3>
+        <p class="xref-subtitle">Opera arrivals vs Duetto bookings · ${summary.dates_checked} stay date(s)</p>
+        ${html}`;
+      xrefSection.style.display = 'block';
+    } else {
+      xrefSection.style.display = 'none';
+    }
+
+    // Excel download
+    if (data.xlsx_b64) {
+      const blob = b64ToBlob(data.xlsx_b64, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      const url  = URL.createObjectURL(blob);
+      const fn   = `DQE_${data.hotel_name.replace(/\s+/g,'_')}_${data.analysis_date}.xlsx`;
+      const el = document.getElementById('dl-btn2');
+      el.href = url; el.download = fn;
+    }
+
+    document.getElementById('report').style.display = 'block';
+    document.getElementById('report').scrollIntoView({ behavior: 'smooth' });
+  }
+
+  function formatFolio(s) {
+    return escHtml(s).replace(/⚑[^\n<]*/g, m => `<span class="folio-match">${m}</span>`);
+  }
+
+  function fmt(n) {
+    if (typeof n !== 'number') return n;
+    return n.toLocaleString('en-US', { minimumFractionDigits:2, maximumFractionDigits:2 });
+  }
+
+  function escHtml(s) {
+    return String(s||'')
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/\n/g,'<br>');
+  }
+
+  function b64ToBlob(b64, type) {
+    const bin = atob(b64);
+    const buf = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+    return new Blob([buf], { type });
+  }
+
+  // ── Monday.com modal ──────────────────────────────────────────────────────
+
+  // Load team members into dropdown on page load
+  fetch('/monday_users')
+    .then(r => r.json())
+    .then(users => {
+      const sel = document.getElementById('m-submitted-by');
+      sel.innerHTML = '<option value="">— Select your name —</option>'
+        + users.map(u => `<option value="${u.id}">${u.name}</option>`).join('');
+    })
+    .catch(() => {});
+
+  function openMondayModal() {
+    const d = window._lastResult;
+    if (!d) return;
+
+    // Auto-fill hotel fields from DVA
+    if (d.hotel_name && d.hotel_name !== 'Unknown Hotel')
+      document.getElementById('m-hotel-name').value = d.hotel_name;
+    if (d.hotel_id)
+      document.getElementById('m-hotel-id').value = d.hotel_id;
+
+    // Auto-fill read-only fields from last analysis
+    document.getElementById('m-stay-range').value  = d.date_range || '';
+    document.getElementById('m-rooms-acc').value   = d.room_accuracy != null ? d.room_accuracy.toFixed(1) + '%' : '';
+    document.getElementById('m-rev-acc').value     = d.rev_accuracy  != null ? d.rev_accuracy.toFixed(1)  + '%' : '';
+
+    const failDates = (d.discrepancies || []).map(x => x.StayDate).join(', ');
+    document.getElementById('m-failing').value = failDates || 'None';
+
+    const files = [];
+    if (document.getElementById('file-comp').files[0])   files.push('DVA: '      + document.getElementById('file-comp').files[0].name);
+    if (document.getElementById('file-res').files[0])    files.push('Bookings: ' + document.getElementById('file-res').files[0].name);
+    if (document.getElementById('file-blk').files[0])    files.push('Blocks: '   + document.getElementById('file-blk').files[0].name);
+    if (document.getElementById('file-folio').files[0])    files.push('Folio: '    + document.getElementById('file-folio').files[0].name);
+    if (document.getElementById('file-arrivals').files[0]) files.push('Arrivals: ' + document.getElementById('file-arrivals').files[0].name);
+    document.getElementById('m-files').value = files.join(' | ');
+
+    // Reset state
+    document.getElementById('modal-form-content').style.display   = 'block';
+    document.getElementById('modal-success-content').style.display = 'none';
+    document.getElementById('modal-error').style.display           = 'none';
+    document.getElementById('modal-submit-btn').disabled           = false;
+    document.getElementById('modal-submit-btn').textContent        = 'Submit';
+
+    document.getElementById('monday-modal').classList.add('open');
+  }
+
+  function closeMondayModal() {
+    document.getElementById('monday-modal').classList.remove('open');
+  }
+
+  // Close on backdrop click
+  document.getElementById('monday-modal').addEventListener('click', e => {
+    if (e.target === document.getElementById('monday-modal')) closeMondayModal();
+  });
+
+  async function submitToMonday() {
+    const d = window._lastResult;
+    if (!d) return;
+
+    const btn = document.getElementById('modal-submit-btn');
+    const errEl = document.getElementById('modal-error');
+    btn.disabled = true;
+    btn.textContent = 'Submitting…';
+    errEl.style.display = 'none';
+
+    const payload = {
+      submitted_by:    document.getElementById('m-submitted-by').value.trim(),
+      hotel_name:      document.getElementById('m-hotel-name').value.trim(),
+      hotel_id:        document.getElementById('m-hotel-id').value.trim(),
+      stay_date_range: document.getElementById('m-stay-range').value,
+      rooms_accuracy:  d.room_accuracy != null ? parseFloat(d.room_accuracy.toFixed(1)) : '',
+      revenue_accuracy: d.rev_accuracy != null ? parseFloat(d.rev_accuracy.toFixed(1))  : '',
+      failing_dates:   document.getElementById('m-failing').value,
+      files_used:      document.getElementById('m-files').value,
+      feedback:         document.getElementById('m-feedback').value.trim(),
+      submitted_by_id:  document.getElementById('m-submitted-by').value,
+      xlsx_b64:         d.xlsx_b64 || '',
+      session_id:       d.session_id || '',
+    };
+
+    try {
+      const resp = await fetch('/submit_monday', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const result = await resp.json();
+
+      if (result.error) {
+        errEl.textContent = 'Submission failed: ' + result.error;
+        errEl.style.display = 'block';
+        btn.disabled = false;
+        btn.textContent = 'Submit';
+      } else {
+        document.getElementById('modal-form-content').style.display   = 'none';
+        document.getElementById('modal-success-content').style.display = 'block';
+      }
+    } catch(e) {
+      errEl.textContent = 'Network error: ' + e.message;
+      errEl.style.display = 'block';
+      btn.disabled = false;
+      btn.textContent = 'Submit';
+    }
+  }
+</script>
+</body>
+</html>
