@@ -42,13 +42,12 @@
     line-height: 1.5;
   }
 
-  /* ── Nav bar ── */
+  /* ── Top bar ── */
   nav {
     background: var(--duetto-dark);
     padding: 0 32px;
     display: flex;
     align-items: center;
-    gap: 0;
     height: 56px;
     border-bottom: 1px solid rgba(196,255,69,.15);
     position: sticky; top: 0; z-index: 100;
@@ -82,14 +81,45 @@
     margin-left: 2px;
   }
 
+  .nav-link-btn {
+    background: transparent; border: none; color: rgba(255,255,255,.75);
+    font-family: inherit; font-size: .84rem; font-weight: 600; cursor: pointer;
+    padding: 8px 12px; border-radius: 8px;
+  }
+  .nav-link-btn:hover { background: rgba(255,255,255,.06); color: #fff; }
+
   .nav-right {
     margin-left: auto;
-    color: var(--muted);
+    color: rgba(255,255,255,.4);
     font-size: .8rem;
   }
 
   /* ── Page shell ── */
-  .page { max-width: 1400px; margin: 0 auto; padding: 32px 24px; }
+  .page { max-width: 900px; margin: 0 auto; padding: 32px 24px; }
+
+  /* ── Credential card + validated-state gating ── */
+  .cred-status-row {
+    display: flex; align-items: center; gap: 10px; margin-top: 16px;
+  }
+  .cred-status-badge {
+    font-size: .78rem; font-weight: 700; padding: 5px 12px; border-radius: 999px;
+  }
+  .cred-status-badge.ok { background: var(--green-bg); color: #166534; }
+  .cred-status-badge.error { background: var(--red-bg); color: #9B1C2E; }
+  .cred-status-badge.pending { background: var(--bg); color: var(--muted); }
+
+  .action-cards { display: flex; flex-direction: column; gap: 20px; }
+  .action-card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 16px;
+    padding: 24px 28px; box-shadow: 0 1px 4px rgba(0,0,0,.06), 0 4px 16px rgba(0,0,0,.04);
+  }
+  .action-card.locked { opacity: .5; pointer-events: none; }
+  .action-card-hdr { margin-bottom: 16px; }
+  .action-card-hdr h2 { font-size: 1.1rem; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+  .action-card-hdr p { color: var(--muted); font-size: .84rem; }
+  .action-card-lock-note {
+    font-size: .76rem; color: var(--muted); font-style: italic; margin-top: 8px;
+  }
 
   /* ── Upload section ── */
   .upload-header {
@@ -196,6 +226,68 @@
     word-break: break-all;
     pointer-events: none;
   }
+
+  /* ── Oracle OHIP live connection panel ── */
+  .oracle-toggle-row { text-align: center; margin: 4px 0 18px; }
+  .oracle-toggle-link {
+    background: none; border: none; cursor: pointer;
+    color: var(--text-mid); font-size: .8rem; font-weight: 600;
+    text-decoration: underline; text-underline-offset: 2px;
+    padding: 4px 8px;
+  }
+  .oracle-toggle-link:hover { color: var(--duetto-dark); }
+
+  .oracle-panel {
+    background: #FAFBFC;
+    border: 1.5px dashed var(--border-mid);
+    border-radius: 12px;
+    padding: 20px 22px;
+    margin-bottom: 20px;
+  }
+  .oracle-panel-hdr { margin-bottom: 14px; }
+  .oracle-panel-hdr span:first-child {
+    display: block; font-weight: 700; font-size: .9rem; color: var(--text);
+  }
+  .oracle-panel-sub { font-size: .78rem; color: var(--muted); }
+
+  .oracle-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px 16px;
+    margin-bottom: 16px;
+  }
+  .oracle-grid label {
+    font-size: .72rem; font-weight: 600; color: var(--text-mid);
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .oracle-grid input {
+    font-family: inherit;
+    font-size: .82rem;
+    font-weight: 400;
+    padding: 8px 10px;
+    border: 1px solid var(--border-mid);
+    border-radius: 8px;
+    background: #fff;
+    color: var(--text);
+  }
+  .oracle-grid input:focus { outline: none; border-color: var(--duetto-green); }
+
+  .oracle-actions { display: flex; align-items: center; gap: 12px; }
+  .oracle-test-btn {
+    background: var(--duetto-dark);
+    color: var(--duetto-green);
+    border: none;
+    border-radius: 8px;
+    padding: 8px 18px;
+    font-size: .8rem;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .oracle-test-btn:hover { background: var(--duetto-mid); }
+  .oracle-test-btn:disabled { opacity: .5; cursor: default; }
+  #oracle-test-result { font-size: .78rem; font-weight: 600; }
+  #oracle-test-result.ok   { color: var(--green-ok); }
+  #oracle-test-result.err  { color: var(--red); }
 
   .run-btn {
     display: flex;
@@ -367,6 +459,7 @@
     box-shadow: 0 1px 4px rgba(0,0,0,.05);
   }
   .table-scroll { overflow-x: auto; }
+  .table-scroll-capped { max-height: 480px; overflow-y: auto; }
   table {
     width: 100%;
     border-collapse: collapse;
@@ -631,6 +724,155 @@
     color: var(--muted);
     margin-bottom: 20px;
   }
+  .modal-hdr {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    margin-bottom: 4px;
+  }
+  .modal-close {
+    background: none; border: none; cursor: pointer;
+    font-size: 1.4rem; line-height: 1; color: var(--muted);
+    padding: 0 4px;
+  }
+  .modal-close:hover { color: var(--text); }
+  .rule-codes-table { width: 100%; border-collapse: collapse; font-size: .82rem; }
+  .rule-codes-table th {
+    text-align: left; background: var(--duetto-dark); color: #fff;
+    padding: 8px 10px; position: sticky; top: 0; font-size: .72rem;
+    text-transform: uppercase; letter-spacing: .04em;
+  }
+  .rule-codes-table td { padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  .rule-codes-table tr:hover td { background: #FAFBFC; }
+  .rule-codes-table .code-pill {
+    display: inline-block; font-family: 'Courier New', monospace; font-weight: 700;
+    background: #EEF2FF; color: #3730A3; padding: 2px 7px; border-radius: 5px; font-size: .75rem;
+  }
+  .rule-codes-table .run-link {
+    background: var(--duetto-dark); color: var(--duetto-green);
+    border: none; border-radius: 6px; padding: 5px 10px; font-size: .74rem; font-weight: 700; cursor: pointer;
+  }
+  .rule-codes-table .run-link:hover { background: var(--duetto-mid); }
+
+
+  .readiness-card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    padding: 18px 20px; margin-bottom: 14px;
+  }
+  .readiness-card-hdr { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .readiness-card-title { font-weight: 700; font-size: .95rem; color: var(--text); }
+  .readiness-badge {
+    font-size: .72rem; font-weight: 700; padding: 3px 10px; border-radius: 20px;
+  }
+  .readiness-badge.ok { background: var(--green-bg); color: #166534; }
+  .readiness-badge.error { background: var(--red-bg); color: #9B1C2E; }
+  .readiness-preview-table { width: 100%; border-collapse: collapse; font-size: .78rem; }
+  .readiness-preview-table th {
+    text-align: left; background: #F3F6F2; color: var(--text-mid);
+    padding: 6px 8px; font-size: .68rem; text-transform: uppercase; letter-spacing: .03em;
+  }
+  .readiness-preview-table td { padding: 6px 8px; border-bottom: 1px solid var(--border); }
+
+  .browse-conn-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 14px 16px;
+  }
+  .browse-conn-grid label {
+    font-size: .72rem; font-weight: 600; color: var(--text-mid);
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .browse-conn-grid input, .browse-conn-grid select {
+    font-family: inherit; font-size: .82rem; padding: 8px 10px;
+    border: 1px solid var(--border-mid); border-radius: 8px; background: #fff; color: var(--text);
+  }
+  .browse-conn-grid input:focus, .browse-conn-grid select:focus { outline: none; border-color: var(--duetto-green); }
+
+  .auth-type-toggle { display: flex; gap: 0; border: 1px solid var(--border-mid); border-radius: 8px; overflow: hidden; width: fit-content; }
+  .auth-type-btn {
+    background: #fff; border: none; padding: 8px 16px; font-size: .8rem; font-weight: 700;
+    color: var(--text-mid); cursor: pointer;
+  }
+  .auth-type-btn.active { background: var(--duetto-dark); color: var(--duetto-green); }
+
+  .appkey-preset-btn {
+    background: var(--card); border: 1px solid var(--border-mid); color: var(--text-mid);
+    font-size: .72rem; font-weight: 700; padding: 8px 10px; border-radius: 6px; cursor: pointer; white-space: nowrap;
+  }
+  .appkey-preset-btn:hover { border-color: var(--duetto-green); }
+
+
+  .result-tabs {
+    display: flex; gap: 6px; margin-bottom: 20px;
+    border-bottom: 1px solid var(--border);
+  }
+  .result-tab {
+    background: none; border: none; cursor: pointer;
+    padding: 10px 16px; font-size: .85rem; font-weight: 600;
+    color: var(--muted); border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+  }
+  .result-tab:hover { color: var(--text-mid); }
+  .result-tab.active { color: var(--duetto-dark); border-bottom-color: var(--duetto-green); }
+  .result-tab-badge {
+    display: inline-block; background: var(--red-bg); color: var(--red);
+    font-size: .68rem; font-weight: 700; padding: 1px 6px; border-radius: 10px; margin-left: 4px;
+  }
+  .disc-search-row { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+  .disc-search-row input {
+    flex: 1; max-width: 420px; font-family: inherit; font-size: .82rem;
+    padding: 8px 12px; border: 1px solid var(--border-mid); border-radius: 8px;
+    background: #fff; color: var(--text);
+  }
+  .disc-search-row input:focus { outline: none; border-color: var(--duetto-green); }
+  #disc-tbody tr.search-hidden { display: none; }
+
+  .step-hdr {
+    display: flex; align-items: center; gap: 10px;
+    font-size: .95rem; font-weight: 700; color: var(--text);
+    margin: 4px 0 14px;
+  }
+  .step-hdr-sub { font-weight: 400; color: var(--muted); font-size: .78rem; }
+  .step-num {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 24px; height: 24px; border-radius: 50%;
+    background: var(--duetto-dark); color: var(--duetto-green);
+    font-size: .78rem; font-weight: 800; flex-shrink: 0;
+  }
+  #step2-container {
+    margin-top: 22px; padding-top: 20px; border-top: 1px solid var(--border);
+    transition: opacity .25s ease;
+  }
+  #step2-container.step2-hidden { display: none; }
+  .dz-unlocks {
+    display: block; font-size: .68rem; color: var(--duetto-green);
+    background: var(--duetto-dark); border-radius: 5px; padding: 3px 7px;
+    margin-top: 6px; pointer-events: none; font-weight: 600;
+  }
+  .dz-filename.valid::before { content: "✓ "; color: var(--green-ok); }
+  .dz-filename.invalid { color: var(--amber); }
+  .dz-filename.invalid::before { content: "⚠ "; }
+  .webhook-row { margin-top: 18px; }
+  .webhook-row label {
+    display: block; font-size: .75rem; font-weight: 600; color: var(--text-mid); margin-bottom: 6px;
+  }
+  .webhook-row input {
+    width: 100%; font-family: inherit; font-size: .82rem;
+    padding: 9px 12px; border: 1px solid var(--border-mid); border-radius: 8px;
+    background: #fff; color: var(--text);
+  }
+  .webhook-row input:focus { outline: none; border-color: var(--duetto-green); }
+
+  .nav-link-btn {
+    background: none;
+    border: 1px solid rgba(255,255,255,.18);
+    color: rgba(255,255,255,.75);
+    font-size: .78rem;
+    font-weight: 600;
+    padding: 6px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    margin-left: 14px;
+  }
+  .nav-link-btn:hover { color: #fff; border-color: rgba(255,255,255,.4); background: rgba(255,255,255,.06); }
   .form-row { margin-bottom: 14px; }
   .form-row label {
     display: block;
@@ -707,21 +949,189 @@
     <img src="/static/duetto-logo.png" alt="Duetto" class="nav-logo-img"/>
     <span class="nav-badge">DQE</span>
   </a>
+  <button class="nav-link-btn" id="nav-recent-runs-btn" type="button">🕐 Recent Runs</button>
   <span class="nav-right" id="today-label"></span>
 </nav>
+
+<!-- ── Recent Runs modal ── -->
+<div class="modal-overlay" id="recent-runs-modal" style="display:none">
+  <div class="modal-box" style="max-width:820px">
+    <div class="modal-hdr">
+      <h3>Recent Runs</h3>
+      <button class="modal-close" onclick="closeRecentRunsModal()">&times;</button>
+    </div>
+    <div class="table-outer" style="max-height:60vh;overflow-y:auto">
+      <table class="rule-codes-table" id="recent-runs-table">
+        <thead><tr><th>Hotel</th><th>Date Range</th><th>Rooms Acc.</th><th>Rev Acc.</th><th>Discrepancies</th><th>Run At</th><th></th></tr></thead>
+        <tbody id="recent-runs-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
 
 <!-- ── Main page ── -->
 <div class="page">
 
-  <!-- Upload section -->
+  <!-- ══════════════ STEP 1 — OHIP CREDENTIALS ══════════════ -->
   <div class="upload-header">
     <h1>Data Quality Engine</h1>
-    <p>Upload your DVA and Duetto export files to identify and root-cause discrepancies between Duetto and your PMS.</p>
+    <p>Enter your Oracle OHIP credentials and validate the connection — this unlocks the actions below. All three actions share these credentials, so you only enter them once.</p>
+  </div>
+  <div class="upload-card">
+    <div class="browse-conn-grid">
+      <label>Auth Type
+        <div class="auth-type-toggle">
+          <button type="button" class="auth-type-btn active" data-auth="ocim" id="cred-auth-ocim-btn">OCIM</button>
+          <button type="button" class="auth-type-btn" data-auth="ssd" id="cred-auth-ssd-btn">SSD</button>
+        </div>
+      </label>
+      <label>Environment
+        <div class="auth-type-toggle">
+          <button type="button" class="auth-type-btn active" data-env="prod" id="cred-env-prod-btn">Prod</button>
+          <button type="button" class="auth-type-btn" data-env="demo" id="cred-env-demo-btn">Demo</button>
+        </div>
+      </label>
+      <label>Server URL
+        <input type="text" id="cred-hostname" placeholder="e.g. mtce16pr.hospitality-api.eu-frankfurt-1.ocs.oraclecloud.com"/>
+      </label>
+      <label>Hotel ID <span style="font-weight:400;color:var(--muted)">(case-sensitive — auto-uppercased)</span>
+        <input type="text" id="cred-hotel-id" placeholder="e.g. RIVERLEE" style="text-transform:uppercase"/>
+      </label>
+      <label style="grid-column:span 2">App Key
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+          <input type="text" id="cred-app-key" style="flex:1;min-width:160px"/>
+          <button type="button" class="appkey-preset-btn" id="cred-appkey-prod-btn">Prod</button>
+          <button type="button" class="appkey-preset-btn" id="cred-appkey-demo-btn">Demo</button>
+        </div>
+      </label>
+      <label id="cred-enterprise-row">Enterprise ID <span style="font-weight:400;color:var(--muted)">(OCIM only)</span>
+        <input type="text" id="cred-enterprise-id" placeholder="e.g. JDE"/>
+      </label>
+      <label>Local UserName
+        <input type="password" id="cred-client-id"/>
+      </label>
+      <label>Local Password
+        <input type="password" id="cred-client-secret"/>
+      </label>
+      <label id="cred-username-row" style="display:none">Remote UserName
+        <input type="text" id="cred-username"/>
+      </label>
+      <label id="cred-password-row" style="display:none">Remote Password
+        <input type="password" id="cred-password"/>
+      </label>
+    </div>
+    <div class="oracle-actions" style="margin-top:16px">
+      <button type="button" class="run-btn" id="cred-validate-btn" style="width:auto;margin:0;padding:10px 24px">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 2.5l10 5.5-10 5.5V2.5z" fill="currentColor"/></svg>
+        Validate Connection
+      </button>
+    </div>
+    <div class="cred-status-row">
+      <span class="cred-status-badge pending" id="cred-status-badge">Not connected</span>
+      <span id="cred-status-detail" style="color:var(--muted);font-size:.8rem"></span>
+    </div>
   </div>
 
-  <div class="upload-card">
-    <div class="drop-grid">
+  <!-- ══════════════ STEP 2 — ACTIONS ══════════════ -->
+  <div class="action-cards">
 
+  <!-- ── Action: Pull Bookings / Blocks / Folio for a day ── -->
+  <div class="action-card locked" id="mode-browse">
+    <div class="action-card-hdr">
+      <h2>📡 Pull Bookings / Blocks / Folio</h2>
+      <p>Pull raw reservations, blocks, or folio data for a date range — no DVA file or comparison needed.</p>
+      <div class="action-card-lock-note" id="browse-lock-note">Validate your credentials above to unlock this.</div>
+    </div>
+
+    <div class="browse-conn-grid">
+      <label>Data Type
+        <select id="browse-data-type">
+          <option value="reservations">Bookings (Reservations)</option>
+          <option value="blocks">Blocks</option>
+          <option value="folio">Folio</option>
+        </select>
+      </label>
+      <label id="browse-extsystem-row" style="display:none">External System Code <span style="font-weight:400;color:var(--muted)">(Blocks only)</span>
+        <input type="text" id="browse-ext-system" placeholder="e.g. DUETTO1"/>
+      </label>
+      <label>Start Date
+        <input type="date" id="browse-start-date"/>
+      </label>
+      <label>End Date
+        <input type="date" id="browse-end-date"/>
+      </label>
+    </div>
+    <div class="oracle-actions" style="margin-top:16px">
+      <button type="button" class="run-btn" id="browse-fetch-btn" style="width:auto;margin:0;padding:10px 24px">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 2.5l10 5.5-10 5.5V2.5z" fill="currentColor"/></svg>
+        Fetch Data
+      </button>
+    </div>
+    <div id="browse-progress-row" style="display:none;margin-top:10px;font-size:.78rem;color:var(--muted)"></div>
+
+    <div id="browse-results" style="display:none;margin-top:20px">
+      <div class="section-label">
+        Results <span id="browse-results-count" style="font-weight:400;color:var(--muted);text-transform:none;letter-spacing:0"></span>
+      </div>
+      <div class="disc-search-row" style="justify-content:space-between">
+        <div style="display:flex;align-items:center;gap:12px">
+          <input type="text" id="browse-search" placeholder="Search results — any field…"/>
+          <span id="browse-search-count" style="color:var(--muted);font-size:.78rem"></span>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button type="button" class="oracle-test-btn" id="browse-download-csv-btn" style="background:transparent;color:var(--duetto-dark);border:1px solid var(--border-mid)">Download CSV</button>
+          <button type="button" class="oracle-test-btn" id="browse-download-tsv-btn" style="background:transparent;color:var(--duetto-dark);border:1px solid var(--border-mid)">Download TSV</button>
+        </div>
+      </div>
+      <p style="color:var(--muted);font-size:.76rem;margin:-6px 0 12px">
+        Downloads include all fields (not just the key-field view above) — open in Excel or Sheets to build your own pivot table.
+      </p>
+      <div class="table-outer">
+        <div class="table-scroll table-scroll-capped">
+          <table class="rule-codes-table" id="browse-results-table">
+            <thead id="browse-results-thead"></thead>
+            <tbody id="browse-results-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div><!-- /mode-browse -->
+
+  <!-- ── Action: Pull Deployment Info ── -->
+  <div class="action-card locked" id="mode-readiness">
+    <div class="action-card-hdr">
+      <h2>🔎 Pull Deployment Info</h2>
+      <p>Fetches Opera Cloud Version, Block Status Codes, Transaction Codes, Room Types, and Hotel Info for one property — no pass/fail judgment, just what came back so you can review it yourself, with a full download for each.</p>
+      <div class="action-card-lock-note" id="readiness-lock-note">Validate your credentials above to unlock this.</div>
+    </div>
+
+    <div class="oracle-actions">
+      <button type="button" class="run-btn" id="readiness-run-btn" style="width:auto;margin:0;padding:10px 24px">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 2.5l10 5.5-10 5.5V2.5z" fill="currentColor"/></svg>
+        Run Config Snapshot
+      </button>
+    </div>
+    <div id="readiness-status" style="margin-top:10px;font-size:.78rem;color:var(--muted)"></div>
+
+    <div id="readiness-results" style="display:none;margin-top:20px"></div>
+  </div><!-- /mode-readiness -->
+
+
+  <!-- ── Action: Upload DVA & Compare (works with or without validated credentials) ── -->
+  <div class="action-card" id="mode-analyze">
+
+  <!-- Upload section -->
+  <div class="action-card-hdr">
+    <h2>🔍 Upload DVA &amp; Compare</h2>
+    <p>Upload your DVA and Duetto export files to identify and root-cause discrepancies between Duetto and your PMS. Works with or without validated credentials — validate above to also pull live arrival data instead of uploading an Arrival Details Report.</p>
+  </div>
+  <div class="upload-card">
+
+    <div class="step-hdr">
+      <span class="step-num">1</span>
+      <span>Upload the DVA File <span class="step-hdr-sub">— the only required input</span></span>
+    </div>
+    <div class="drop-grid">
       <div class="drop-zone" id="zone-comp">
         <input type="file" id="file-comp" accept=".xlsx,.xls"/>
         <span class="dz-required">Required</span>
@@ -730,43 +1140,86 @@
         <span class="dz-hint">.xlsx · Duetto Data Validation results</span>
         <div class="dz-filename" id="name-comp"></div>
       </div>
+    </div>
 
-      <div class="drop-zone" id="zone-res">
-        <input type="file" id="file-res" accept=".tsv,.csv,.txt"/>
-        <span class="dz-optional">Optional</span>
-        <span class="dz-icon">🛎️</span>
-        <span class="dz-label">Bookings Report</span>
-        <span class="dz-hint">.tsv / .csv · Duetto flat bookings export</span>
-        <div class="dz-filename" id="name-res"></div>
+    <div id="step2-container" class="step2-hidden">
+      <div class="step-hdr">
+        <span class="step-num">2</span>
+        <span>Add Optional Files <span class="step-hdr-sub">— each one unlocks deeper root-cause analysis</span></span>
+      </div>
+      <div class="drop-grid">
+        <div class="drop-zone" id="zone-res">
+          <input type="file" id="file-res" accept=".tsv,.csv,.txt"/>
+          <span class="dz-optional">Optional</span>
+          <span class="dz-icon">🛎️</span>
+          <span class="dz-label">Bookings Report</span>
+          <span class="dz-hint">.tsv / .csv · Duetto flat bookings export</span>
+          <span class="dz-unlocks">Unlocks: reservation-level root-cause & missing-booking detection</span>
+          <div class="dz-filename" id="name-res"></div>
+        </div>
+
+        <div class="drop-zone" id="zone-blk">
+          <input type="file" id="file-blk" accept=".tsv,.csv,.txt"/>
+          <span class="dz-optional">Optional</span>
+          <span class="dz-icon">🏨</span>
+          <span class="dz-label">Blocks Report</span>
+          <span class="dz-hint">.tsv / .csv · Duetto flat blocks export</span>
+          <span class="dz-unlocks">Unlocks: block-reservation context for room discrepancies</span>
+          <div class="dz-filename" id="name-blk"></div>
+        </div>
+
+        <div class="drop-zone" id="zone-folio">
+          <input type="file" id="file-folio" accept=".tsv,.csv,.txt"/>
+          <span class="dz-optional">Optional</span>
+          <span class="dz-icon">🧾</span>
+          <span class="dz-label">Folio Report</span>
+          <span class="dz-hint">.tsv / .csv · Duetto flat folio export</span>
+          <span class="dz-unlocks">Unlocks: revenue root-causing via unmapped transaction codes</span>
+          <div class="dz-filename" id="name-folio"></div>
+        </div>
+
+        <div class="drop-zone" id="zone-arrivals">
+          <input type="file" id="file-arrivals" accept=".xml,.pdf,.txt"/>
+          <span class="dz-optional">Optional</span>
+          <span class="dz-icon">📋</span>
+          <span class="dz-label">Arrival Details Report</span>
+          <span class="dz-hint">.xml, .pdf or .txt · Opera arrivals export</span>
+          <span class="dz-unlocks">Unlocks: PMS sync-gap detection & rate mismatch checks</span>
+          <div class="dz-filename" id="name-arrivals"></div>
+        </div>
       </div>
 
-      <div class="drop-zone" id="zone-blk">
-        <input type="file" id="file-blk" accept=".tsv,.csv,.txt"/>
-        <span class="dz-optional">Optional</span>
-        <span class="dz-icon">🏨</span>
-        <span class="dz-label">Blocks Report</span>
-        <span class="dz-hint">.tsv / .csv · Duetto flat blocks export</span>
-        <div class="dz-filename" id="name-blk"></div>
+      <div class="oracle-toggle-row">
+        <button type="button" class="oracle-toggle-link" id="oracle-toggle-btn">
+          🔌 Or pull live arrivals via Oracle OHIP instead of uploading a file
+        </button>
       </div>
 
-      <div class="drop-zone" id="zone-folio">
-        <input type="file" id="file-folio" accept=".tsv,.csv,.txt"/>
-        <span class="dz-optional">Optional</span>
-        <span class="dz-icon">🧾</span>
-        <span class="dz-label">Folio Report</span>
-        <span class="dz-hint">.tsv / .csv · Duetto flat folio export</span>
-        <div class="dz-filename" id="name-folio"></div>
+      <div class="oracle-panel" id="oracle-panel" style="display:none">
+        <div class="oracle-panel-hdr">
+          <span>Live Oracle Arrivals</span>
+          <span class="oracle-panel-sub">Uses the credentials validated in Step 1 above. Pulls arrival reservations directly from Oracle — no manual export needed. Overrides the Arrival Details Report file above.</span>
+        </div>
+        <div class="oracle-grid">
+          <label>Start Stay Date
+            <input type="date" id="oracle-start-date"/>
+          </label>
+          <label>End Stay Date
+            <input type="date" id="oracle-end-date"/>
+          </label>
+        </div>
+        <div class="oracle-actions">
+          <button type="button" class="oracle-test-btn" id="oracle-test-btn">Test Connection</button>
+          <span id="oracle-test-result"></span>
+        </div>
+        <div id="oracle-progress-row" style="display:none;margin-top:10px;font-size:.78rem;color:var(--muted)"></div>
       </div>
 
-      <div class="drop-zone" id="zone-arrivals">
-        <input type="file" id="file-arrivals" accept=".xml,.pdf,.txt"/>
-        <span class="dz-optional">Optional</span>
-        <span class="dz-icon">📋</span>
-        <span class="dz-label">Arrival Details Report</span>
-        <span class="dz-hint">.xml, .pdf or .txt · Opera arrivals export</span>
-        <div class="dz-filename" id="name-arrivals"></div>
+      <div class="webhook-row">
+        <label>Webhook / Slack URL <span style="font-weight:400;color:var(--muted)">(optional — get notified when this run completes)</span>
+          <input type="text" id="webhook-url" placeholder="https://hooks.slack.com/services/..."/>
+        </label>
       </div>
-
     </div>
 
     <button class="run-btn" id="run-btn" disabled>
@@ -795,84 +1248,104 @@
       </div>
     </div>
 
-    <!-- Accuracy cards -->
-    <div class="section-label">Overall Accuracy</div>
-    <div class="accuracy-row">
-      <div class="acc-card" id="card-rooms">
-        <div class="acc-icon">🛏️</div>
-        <div>
-          <div class="acc-label">Rooms Commit Accuracy</div>
-          <div class="acc-value" id="val-rooms">—</div>
-          <div class="acc-sub" id="sub-rooms">—</div>
+    <!-- Result tabs -->
+    <div class="result-tabs" id="result-tabs">
+      <button class="result-tab active" data-tab="tab-summary">Summary</button>
+      <button class="result-tab" data-tab="tab-discrepancies">Discrepancies <span class="result-tab-badge" id="tab-badge-disc"></span></button>
+      <button class="result-tab" data-tab="tab-reconciliation" id="tab-btn-recon" style="display:none">Reconciliation</button>
+      <button class="result-tab" data-tab="tab-recommendations">Recommendations</button>
+    </div>
+
+    <!-- ── Summary tab ── -->
+    <div class="result-tab-panel" id="tab-summary">
+      <div class="section-label">Overall Accuracy</div>
+      <div class="accuracy-row">
+        <div class="acc-card" id="card-rooms">
+          <div class="acc-icon">🛏️</div>
+          <div>
+            <div class="acc-label">Rooms Commit Accuracy</div>
+            <div class="acc-value" id="val-rooms">—</div>
+            <div class="acc-sub" id="sub-rooms">—</div>
+          </div>
         </div>
-      </div>
-      <div class="acc-card" id="card-rev">
-        <div class="acc-icon">💰</div>
-        <div>
-          <div class="acc-label">Room Revenue Accuracy</div>
-          <div class="acc-value" id="val-rev">—</div>
-          <div class="acc-sub" id="sub-rev">—</div>
+        <div class="acc-card" id="card-rev">
+          <div class="acc-icon">💰</div>
+          <div>
+            <div class="acc-label">Room Revenue Accuracy</div>
+            <div class="acc-value" id="val-rev">—</div>
+            <div class="acc-sub" id="sub-rev">—</div>
+          </div>
         </div>
-      </div>
-      <div class="acc-card" id="card-xref" style="display:none">
-        <div class="acc-icon">🔗</div>
-        <div>
-          <div class="acc-label">Bookings vs Arrivals</div>
-          <div class="acc-value" id="val-xref">—</div>
-          <div class="acc-sub" id="sub-xref">—</div>
+        <div class="acc-card" id="card-xref" style="display:none">
+          <div class="acc-icon">🔗</div>
+          <div>
+            <div class="acc-label">Bookings vs Arrivals</div>
+            <div class="acc-value" id="val-xref">—</div>
+            <div class="acc-sub" id="sub-xref">—</div>
+          </div>
         </div>
       </div>
     </div>
 
-    <!-- Stay Date Reconciliation panel (shown only when arrivals data present) -->
-    <div id="recon-panel" style="display:none">
-      <div class="section-label">Stay Date Reconciliation</div>
-      <div class="recon-card">
-        <table class="recon-table">
-          <thead>
-            <tr>
-              <th>Source</th>
-              <th>Rooms</th>
-              <th>vs Opera</th>
-            </tr>
-          </thead>
-          <tbody id="recon-tbody"></tbody>
-        </table>
-        <div class="recon-gap-note" id="recon-gap-note" style="display:none"></div>
+    <!-- ── Discrepancies tab ── -->
+    <div class="result-tab-panel" id="tab-discrepancies" style="display:none">
+      <div class="section-label">Discrepancy Detail by Stay Date</div>
+      <div class="disc-search-row">
+        <input type="text" id="disc-search" placeholder="Search discrepancies — date, code, explanation, booking ID…"/>
+        <span id="disc-search-count" style="color:var(--muted);font-size:.78rem"></span>
+      </div>
+      <div class="table-outer">
+        <div class="table-scroll">
+          <table id="disc-table">
+            <thead>
+              <tr class="th-group">
+                <th class="th-meta" colspan="2">DATE</th>
+                <th class="th-rooms" colspan="7">ROOMS COMMIT</th>
+                <th class="th-rev"   colspan="7">ROOM REVENUE</th>
+                <th class="th-folio" colspan="1">FOLIO ANALYSIS</th>
+              </tr>
+              <tr class="th-cols">
+                <th>Stay Date</th>
+                <th>Period</th>
+                <th>Status</th><th>Duetto</th><th>PMS</th><th>Diff</th><th>Code</th><th>Explanation</th><th>Bookings</th>
+                <th>Status</th><th>Duetto</th><th>PMS</th><th>Diff</th><th>Code</th><th>Explanation</th><th>Bookings</th>
+                <th>Unmapped Codes</th>
+              </tr>
+            </thead>
+            <tbody id="disc-tbody"></tbody>
+          </table>
+        </div>
       </div>
     </div>
 
-    <!-- Discrepancy table -->
-    <div class="section-label">Discrepancy Detail by Stay Date</div>
-    <div class="table-outer">
-      <div class="table-scroll">
-        <table id="disc-table">
-          <thead>
-            <tr class="th-group">
-              <th class="th-meta" colspan="2">DATE</th>
-              <th class="th-rooms" colspan="7">ROOMS COMMIT</th>
-              <th class="th-rev"   colspan="7">ROOM REVENUE</th>
-              <th class="th-folio" colspan="1">FOLIO ANALYSIS</th>
-            </tr>
-            <tr class="th-cols">
-              <th>Stay Date</th>
-              <th>Period</th>
-              <th>Status</th><th>Duetto</th><th>PMS</th><th>Diff</th><th>Code</th><th>Explanation</th><th>Bookings</th>
-              <th>Status</th><th>Duetto</th><th>PMS</th><th>Diff</th><th>Code</th><th>Explanation</th><th>Bookings</th>
-              <th>Unmapped Codes</th>
-            </tr>
-          </thead>
-          <tbody id="disc-tbody"></tbody>
-        </table>
+    <!-- ── Reconciliation tab (shown only when arrivals data present) ── -->
+    <div class="result-tab-panel" id="tab-reconciliation" style="display:none">
+      <div id="recon-panel" style="display:none">
+        <div class="section-label">Stay Date Reconciliation</div>
+        <div class="recon-card">
+          <table class="recon-table">
+            <thead>
+              <tr>
+                <th>Source</th>
+                <th>Rooms</th>
+                <th>vs Opera</th>
+              </tr>
+            </thead>
+            <tbody id="recon-tbody"></tbody>
+          </table>
+          <div class="recon-gap-note" id="recon-gap-note" style="display:none"></div>
+        </div>
       </div>
+
+      <!-- Arrivals cross-reference -->
+      <div id="arrivals-xref-section" style="display:none;margin-bottom:24px"></div>
     </div>
 
-    <!-- Arrivals cross-reference -->
-    <div id="arrivals-xref-section" style="display:none;margin-bottom:24px"></div>
-
-    <!-- Recommendations -->
-    <div class="section-label">Consultant Recommendations</div>
-    <div class="rec-grid" id="rec-list"></div>
+    <!-- ── Recommendations tab ── -->
+    <div class="result-tab-panel" id="tab-recommendations" style="display:none">
+      <div class="section-label">Consultant Recommendations</div>
+      <div class="rec-grid" id="rec-list"></div>
+    </div>
 
     <div class="dl-row">
       <a class="dl-btn" id="dl-btn2" href="#" download="report.xlsx">
@@ -886,6 +1359,9 @@
     </div>
 
   </div><!-- /report -->
+
+  </div><!-- /mode-analyze -->
+  </div><!-- /action-cards -->
 
 </div><!-- /page -->
 
@@ -959,6 +1435,450 @@
   document.getElementById('today-label').textContent =
     new Date().toLocaleDateString('en-GB', { weekday:'short', day:'numeric', month:'long', year:'numeric' });
 
+  // ── Recent Runs modal ────────────────────────────────────────────────────
+  function openRecentRunsModal() {
+    document.getElementById('recent-runs-modal').style.display = 'flex';
+    loadRecentRuns();
+  }
+  function closeRecentRunsModal() {
+    document.getElementById('recent-runs-modal').style.display = 'none';
+  }
+  document.getElementById('nav-recent-runs-btn').addEventListener('click', openRecentRunsModal);
+
+  function loadRecentRuns(targetTbodyId = 'recent-runs-tbody') {
+    fetch('/runs?limit=50').then(r => r.json()).then(runs => {
+      const tbody = document.getElementById(targetTbodyId);
+      if (!tbody) return;
+      if (!runs.length) {
+        tbody.innerHTML = '<tr><td colspan="7" style="color:var(--muted)">No runs yet — run an analysis to see it here.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = runs.map(run => `
+        <tr>
+          <td>${escHtml(run.hotel_name || 'Unknown')}${run.hotel_id ? ' <span style="color:var(--muted)">(' + escHtml(run.hotel_id) + ')</span>' : ''}</td>
+          <td>${escHtml(run.date_range || '')}</td>
+          <td>${run.room_accuracy != null ? run.room_accuracy.toFixed(1) + '%' : '—'}</td>
+          <td>${run.rev_accuracy != null ? run.rev_accuracy.toFixed(1) + '%' : '—'}</td>
+          <td>${run.discrepancy_count ?? 0}</td>
+          <td style="white-space:nowrap;color:var(--muted);font-size:.72rem">${new Date(run.created_at).toLocaleString()}</td>
+          <td><button class="run-link" onclick="loadPastRun('${run.id}')">View</button></td>
+        </tr>`).join('');
+    }).catch(() => {
+      const tbody = document.getElementById(targetTbodyId);
+      if (tbody) tbody.innerHTML = '<tr><td colspan="7" style="color:var(--muted)">Could not load run history.</td></tr>';
+    });
+  }
+
+  function loadPastRun(runId) {
+    fetch(`/runs/${runId}`).then(r => r.json()).then(data => {
+      if (data.error) { alert(data.error); return; }
+      closeRecentRunsModal();
+      window._lastResult = data;
+      renderReport(data);
+      document.getElementById('mode-analyze').scrollIntoView({ behavior: 'smooth' });
+    }).catch(e => alert('Could not load run: ' + e.message));
+  }
+
+  // ══════════════ Shared OHIP credentials (Step 1) ══════════════
+  const ORACLE_APP_KEYS = {
+    prod: 'c695179c-d600-4569-91ac-f87a1ec99d51',
+    demo: 'f5fda1cf-8cce-4ef9-9649-7f5dddade0d1',
+  };
+
+  let credEnvironment = 'prod';
+  document.getElementById('cred-env-prod-btn').addEventListener('click', () => {
+    credEnvironment = 'prod';
+    document.getElementById('cred-env-prod-btn').classList.add('active');
+    document.getElementById('cred-env-demo-btn').classList.remove('active');
+  });
+  document.getElementById('cred-env-demo-btn').addEventListener('click', () => {
+    credEnvironment = 'demo';
+    document.getElementById('cred-env-demo-btn').classList.add('active');
+    document.getElementById('cred-env-prod-btn').classList.remove('active');
+  });
+
+  let credAuthType = 'ocim';
+  function setCredAuthType(type) {
+    credAuthType = type;
+    document.getElementById('cred-auth-ocim-btn').classList.toggle('active', type === 'ocim');
+    document.getElementById('cred-auth-ssd-btn').classList.toggle('active', type === 'ssd');
+    document.getElementById('cred-enterprise-row').style.display = type === 'ocim' ? 'flex' : 'none';
+    document.getElementById('cred-username-row').style.display = type === 'ssd' ? 'flex' : 'none';
+    document.getElementById('cred-password-row').style.display = type === 'ssd' ? 'flex' : 'none';
+  }
+  document.getElementById('cred-auth-ocim-btn').addEventListener('click', () => setCredAuthType('ocim'));
+  document.getElementById('cred-auth-ssd-btn').addEventListener('click', () => setCredAuthType('ssd'));
+
+  document.getElementById('cred-appkey-prod-btn').addEventListener('click', () => {
+    document.getElementById('cred-app-key').value = ORACLE_APP_KEYS.prod;
+  });
+  document.getElementById('cred-appkey-demo-btn').addEventListener('click', () => {
+    document.getElementById('cred-app-key').value = ORACLE_APP_KEYS.demo;
+  });
+
+  document.getElementById('cred-hotel-id').addEventListener('input', (e) => {
+    e.target.value = e.target.value.toUpperCase();
+  });
+
+  function getSharedCredentials() {
+    const creds = {
+      auth_type: credAuthType,
+      environment: credEnvironment,
+      hostname: document.getElementById('cred-hostname').value.trim(),
+      hotel_id: document.getElementById('cred-hotel-id').value.trim(),
+      app_key: document.getElementById('cred-app-key').value.trim(),
+      client_id: document.getElementById('cred-client-id').value.trim(),
+      client_secret: document.getElementById('cred-client-secret').value.trim(),
+    };
+    if (credAuthType === 'ocim') {
+      creds.enterprise_id = document.getElementById('cred-enterprise-id').value.trim();
+    } else {
+      creds.username = document.getElementById('cred-username').value.trim();
+      creds.password = document.getElementById('cred-password').value.trim();
+    }
+    return creds;
+  }
+
+  let credentialsValidated = false;
+
+  function setLockedState(validated) {
+    credentialsValidated = validated;
+    ['mode-browse', 'mode-readiness'].forEach(id => {
+      document.getElementById(id).classList.toggle('locked', !validated);
+    });
+    document.getElementById('browse-lock-note').style.display = validated ? 'none' : 'block';
+    document.getElementById('readiness-lock-note').style.display = validated ? 'none' : 'block';
+  }
+
+  function setCredStatus(state, detail) {
+    const badge = document.getElementById('cred-status-badge');
+    badge.className = 'cred-status-badge ' + state;
+    badge.textContent = state === 'ok' ? '✓ Connected' : state === 'error' ? '✗ Not connected' : 'Not connected';
+    document.getElementById('cred-status-detail').textContent = detail || '';
+  }
+
+  document.getElementById('cred-validate-btn').addEventListener('click', async () => {
+    const creds = getSharedCredentials();
+    // client_secret may be intentionally blank when reusing a previously
+    // validated hotel_id/environment — the server falls back to the saved one.
+    const required = ['hostname', 'hotel_id', 'app_key', 'client_id'];
+    const missing = required.filter(k => !creds[k]);
+    if (missing.length) {
+      setCredStatus('error', 'Missing: ' + missing.join(', '));
+      return;
+    }
+    const btn = document.getElementById('cred-validate-btn');
+    btn.disabled = true;
+    setCredStatus('pending', 'Validating…');
+    try {
+      const resp = await fetch('/validate_oracle_credentials', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(creds),
+      });
+      const data = await resp.json();
+      btn.disabled = false;
+      if (!data.ok) {
+        setCredStatus('error', data.error || 'Validation failed.');
+        setLockedState(false);
+        return;
+      }
+      setCredStatus('ok', `Connected as ${creds.hotel_id} (${creds.environment}).`);
+      setLockedState(true);
+    } catch (e) {
+      btn.disabled = false;
+      setCredStatus('error', e.message);
+      setLockedState(false);
+    }
+  });
+
+  // Prefill from whatever credentials were last validated — no hotel directory,
+  // just remembers the one most-recently-used set so re-runs don't mean retyping.
+  function loadLastCredentials() {
+    fetch('/oracle_credentials/last').then(r => r.json()).then(data => {
+      if (!data || !data.hotel_id) return;
+      document.getElementById('cred-hostname').value = data.hostname || '';
+      document.getElementById('cred-hotel-id').value = data.hotel_id || '';
+      document.getElementById('cred-app-key').value = data.app_key || '';
+      document.getElementById('cred-client-id').value = data.client_id || '';
+      document.getElementById('cred-enterprise-id').value = data.enterprise_id || '';
+      if (data.environment === 'demo') document.getElementById('cred-env-demo-btn').click();
+      // Client secret is never returned — left blank; the server reuses the
+      // saved one automatically when this field is empty on validate/fetch.
+    }).catch(() => { /* first run, nothing saved yet */ });
+  }
+  loadLastCredentials();
+
+  setLockedState(false);
+
+  // ══════════════ Pull Bookings / Blocks / Folio (uses shared credentials) ══════════════
+  document.getElementById('browse-data-type').addEventListener('change', (e) => {
+    const needsExtSystem = e.target.value === 'blocks';
+    document.getElementById('browse-extsystem-row').style.display = needsExtSystem ? 'flex' : 'none';
+    if (needsExtSystem && !document.getElementById('browse-ext-system').value) {
+      document.getElementById('browse-ext-system').value = 'DUETTO1';
+    }
+  });
+
+  // ══════════════ Pull Deployment Info / Config Snapshot (uses shared credentials) ══════════════
+  document.getElementById('readiness-run-btn').addEventListener('click', async () => {
+    const payload = getSharedCredentials();
+    const required = ['hostname', 'hotel_id', 'app_key', 'client_id'];
+    const missing = required.filter(k => !payload[k]);
+    if (missing.length) { alert('Missing required field(s): ' + missing.join(', ')); return; }
+
+    const btn = document.getElementById('readiness-run-btn');
+    const statusEl = document.getElementById('readiness-status');
+    btn.disabled = true;
+    statusEl.textContent = 'Running 5 checks — this can take a few seconds…';
+    document.getElementById('readiness-results').style.display = 'none';
+
+    try {
+      const resp = await fetch('/readiness_check', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await resp.json();
+      btn.disabled = false;
+      if (data.error) {
+        statusEl.textContent = '';
+        alert('Error: ' + data.error);
+        return;
+      }
+      statusEl.textContent = `Checked ${escHtml(payload.hotel_id)} just now.`;
+      renderReadinessResults(data.results, payload.hotel_id);
+    } catch (e) {
+      btn.disabled = false;
+      statusEl.textContent = '';
+      alert('Fetch error: ' + e.message);
+    }
+  });
+
+  let _readinessResults = [];
+  let _readinessHotelId = '';
+
+  function downloadReadinessExport(idx, delim, ext, mime) {
+    const r = _readinessResults[idx];
+    if (!r) return;
+    downloadDelimited(r.records || [], r.all_columns || [], `dqe_config_${r.data_type}_${_readinessHotelId}`, delim, ext, mime);
+  }
+
+  function renderReadinessResults(results, hotelId) {
+    _readinessResults = results;
+    _readinessHotelId = hotelId || '';
+    const container = document.getElementById('readiness-results');
+    container.style.display = 'block';
+    container.innerHTML = results.map((r, idx) => {
+      const badge = r.status === 'ok'
+        ? `<span class="readiness-badge ok">${r.count} record${r.count !== 1 ? 's' : ''}</span>`
+        : `<span class="readiness-badge error">Error</span>`;
+      let body;
+      let downloadBtns = '';
+      if (r.status !== 'ok') {
+        body = `<p style="color:#9B1C2E;font-size:.82rem;margin:0">${escHtml(r.error || 'Unknown error')}</p>`;
+      } else if (!r.preview || !r.preview.length) {
+        body = `<p style="color:var(--muted);font-size:.82rem;margin:0">No records returned.</p>`;
+      } else {
+        const cols = r.preview_columns && r.preview_columns.length ? r.preview_columns : Object.keys(r.preview[0]);
+        body = `<table class="readiness-preview-table"><thead><tr>${
+          cols.map(c => `<th>${escHtml(c)}</th>`).join('')
+        }</tr></thead><tbody>${
+          r.preview.map(row => `<tr>${cols.map(c => `<td>${escHtml(row[c] != null ? String(row[c]) : '')}</td>`).join('')}</tr>`).join('')
+        }</tbody></table>` + (r.count > r.preview.length ? `<p style="color:var(--muted);font-size:.74rem;margin:6px 0 0">Showing ${r.preview.length} of ${r.count} above — download for the full list.</p>` : '');
+        downloadBtns = `
+          <button type="button" class="oracle-test-btn" style="background:transparent;color:var(--duetto-dark);border:1px solid var(--border-mid);padding:5px 10px;font-size:.72rem" onclick="downloadReadinessExport(${idx}, ',', 'csv', 'text/csv')">⬇ CSV</button>
+          <button type="button" class="oracle-test-btn" style="background:transparent;color:var(--duetto-dark);border:1px solid var(--border-mid);padding:5px 10px;font-size:.72rem" onclick="downloadReadinessExport(${idx}, '\\t', 'tsv', 'text/tab-separated-values')">⬇ TSV</button>`;
+      }
+      return `<div class="readiness-card">
+        <div class="readiness-card-hdr">
+          <span class="readiness-card-title">${escHtml(r.label)}</span>
+          <span style="display:flex;gap:6px;align-items:center">${downloadBtns}${badge}</span>
+        </div>
+        ${body}
+      </div>`;
+    }).join('');
+  }
+
+  function browsePollProgress(progressId, rowEl) {
+    rowEl.style.display = 'block';
+    return setInterval(async () => {
+      try {
+        const p = await (await fetch(`/oracle_progress/${progressId}`)).json();
+        if (p.status === 'fetching') rowEl.textContent = `⏳ Fetching page ${p.page}… ${p.total_fetched} records so far`;
+        else if (p.status === 'rate_limited') rowEl.textContent = `⚠ Rate limited — retrying with backoff…`;
+        else if (p.status === 'done') rowEl.textContent = `✓ Fetch complete — ${p.total_fetched} records across ${p.page} page(s)`;
+      } catch (e) { /* ignore transient poll errors */ }
+    }, 800);
+  }
+
+  let _browseRecords = [];
+  document.getElementById('browse-fetch-btn').addEventListener('click', async () => {
+    const dataType = document.getElementById('browse-data-type').value;
+    const payload = {
+      ...getSharedCredentials(),
+      data_type: dataType,
+      start_date: document.getElementById('browse-start-date').value,
+      end_date: document.getElementById('browse-end-date').value,
+      ext_system_code: document.getElementById('browse-ext-system').value.trim() || 'DUETTO1',
+    };
+    // client_secret is intentionally not required here — it may fall back to
+    // a previously saved credential for this hotel_id, checked server-side.
+    const required = ['hostname', 'hotel_id', 'app_key', 'client_id'];
+    const missing = required.filter(k => !payload[k]);
+    if (missing.length) {
+      alert('Missing required field(s): ' + missing.join(', '));
+      return;
+    }
+
+    const btn = document.getElementById('browse-fetch-btn');
+    btn.disabled = true;
+    const progressId = 'browse-' + Date.now();
+    payload.progress_id = progressId;
+    const progressRow = document.getElementById('browse-progress-row');
+    const pollHandle = browsePollProgress(progressId, progressRow);
+
+    try {
+      const resp = await fetch('/browse_oracle', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await resp.json();
+      clearInterval(pollHandle);
+      btn.disabled = false;
+      if (data.error) {
+        alert('Error: ' + data.error);
+        return;
+      }
+      renderBrowseResults(data);
+    } catch (e) {
+      clearInterval(pollHandle);
+      btn.disabled = false;
+      alert('Fetch error: ' + e.message);
+    }
+  });
+
+  let _browseAllColumns = [];
+  let _browsePreferredColumns = [];
+  let _browseColumnLabels = {};
+  let _browseShowAllFields = false;
+
+  let _browseDataType = '';
+
+  function renderBrowseResults(data) {
+    _browseRecords = data.records || [];
+    _browseAllColumns = data.all_columns || [];
+    _browsePreferredColumns = data.preferred_columns || [];
+    _browseColumnLabels = data.column_labels || {};
+    _browseShowAllFields = false;
+    _browseDataType = data.data_type || '';
+
+    document.getElementById('browse-results').style.display = 'block';
+    document.getElementById('browse-search').value = '';
+    document.getElementById('browse-search-count').textContent = '';
+    renderBrowseTable(_browseDataType);
+  }
+
+  function renderBrowseTable(dataType) {
+    _browseDataType = dataType;
+    const countEl = document.getElementById('browse-results-count');
+    const toggleLabel = _browseShowAllFields ? 'showing all fields' : 'showing key fields';
+
+    countEl.innerHTML = `— ${_browseRecords.length} ${escHtml(dataType)} record(s) (${toggleLabel}) &nbsp;` +
+      `<button type="button" class="run-link" id="browse-toggle-fields-btn" style="margin-left:6px">` +
+      `${_browseShowAllFields ? 'Show key fields only' : `Show all fields (${_browseAllColumns.length})`}</button>`;
+
+    const thead = document.getElementById('browse-results-thead');
+    const tbody = document.getElementById('browse-results-tbody');
+
+    if (!_browseRecords.length) {
+      thead.innerHTML = '';
+      tbody.innerHTML = `<tr><td style="text-align:center;padding:32px;color:var(--muted)">No records returned for this window.</td></tr>`;
+    } else {
+      const columns = _browseShowAllFields ? _browseAllColumns : _browsePreferredColumns;
+      thead.innerHTML = '<tr>' + columns.map(c => `<th>${escHtml(_browseColumnLabels[c] || c)}</th>`).join('') + '</tr>';
+      tbody.innerHTML = _browseRecords.map(row => {
+        return '<tr>' + columns.map(c => {
+          const val = row[c] != null ? String(row[c]) : '';
+          return `<td>${escHtml(val.length > 100 ? val.slice(0, 100) + '…' : val)}</td>`;
+        }).join('') + '</tr>';
+      }).join('');
+    }
+
+    document.getElementById('browse-toggle-fields-btn').addEventListener('click', () => {
+      _browseShowAllFields = !_browseShowAllFields;
+      renderBrowseTable(dataType);
+    });
+
+    // Re-apply any free-text search on top of whatever is currently rendered
+    document.getElementById('browse-search').dispatchEvent(new Event('input'));
+  }
+
+  // ── CSV / TSV export — full flattened dataset, for building pivot tables in Excel/Sheets ──
+  function escapeDelimited(val, delim) {
+    let s = val == null ? '' : String(val);
+    const mustQuote = s.includes(delim) || s.includes('"') || s.includes('\n') || s.includes('\r');
+    if (mustQuote) s = '"' + s.replace(/"/g, '""') + '"';
+    return s;
+  }
+
+  // Full-path header, e.g. "postedAmount.amount" -> "Posted Amount - Amount",
+  // so exported columns stay unambiguous (multiple OHIP fields share a last
+  // segment like "amount" or "currencyCode" — a bare label would collide).
+  function humanizeFullPath(path) {
+    return path.split('.').map(seg => {
+      const words = seg.replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/_/g, ' ');
+      return words.charAt(0).toUpperCase() + words.slice(1);
+    }).join(' - ');
+  }
+
+  function buildDelimitedExportFrom(records, columns, delim) {
+    const headerRow = columns.map(c => escapeDelimited(humanizeFullPath(c), delim)).join(delim);
+    const dataRows = records.map(row =>
+      columns.map(c => escapeDelimited(row[c], delim)).join(delim)
+    );
+    return [headerRow, ...dataRows].join('\r\n');
+  }
+
+  function downloadDelimited(records, columns, filenameBase, delim, ext, mime) {
+    if (!records.length) { alert('No records to export.'); return; }
+    const content = buildDelimitedExportFrom(records, columns, delim);
+    const blob = new Blob([content], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const stamp = new Date().toISOString().slice(0, 10);
+    a.href = url;
+    a.download = `${filenameBase}_${stamp}.${ext}`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  function downloadBrowseExport(delim, ext, mime) {
+    downloadDelimited(_browseRecords, _browseAllColumns, `dqe_browse_${_browseDataType}`, delim, ext, mime);
+  }
+
+  document.getElementById('browse-download-csv-btn').addEventListener('click', () => {
+    downloadBrowseExport(',', 'csv', 'text/csv');
+  });
+  document.getElementById('browse-download-tsv-btn').addEventListener('click', () => {
+    downloadBrowseExport('\t', 'tsv', 'text/tab-separated-values');
+  });
+
+  document.getElementById('browse-search').addEventListener('input', (e) => {
+    const q = e.target.value.trim().toLowerCase();
+    const rows = document.querySelectorAll('#browse-results-tbody tr');
+    let shown = 0;
+    rows.forEach(row => {
+      const match = !q || row.textContent.toLowerCase().includes(q);
+      row.style.display = match ? '' : 'none';
+      if (match) shown++;
+    });
+    document.getElementById('browse-search-count').textContent = q ? `${shown} of ${rows.length} rows` : '';
+  });
+
   // File zones
   const zones = [
     { zone: 'zone-comp',  input: 'file-comp',  label: 'name-comp',  required: true  },
@@ -968,14 +1888,56 @@
     { zone: 'zone-arrivals', input: 'file-arrivals', label: 'name-arrivals', required: false },
   ];
 
+  // Expected header keywords per file, for lightweight client-side validation.
+  // Not exhaustive — just enough to catch "wrong file uploaded" mistakes early.
+  const EXPECTED_HEADERS = {
+    'file-res':      ['STAY_DATE'],
+    'file-blk':      ['STAY_DATE'],
+    'file-folio':    ['STAY_DATE'],
+    'file-arrivals': ['CONFIRMATION_NO', 'ARRIVAL', 'DEPARTURE'],
+  };
+
+  function validateFileInline(file, inputId, lEl) {
+    const expected = EXPECTED_HEADERS[inputId];
+    const ext = file.name.toLowerCase().split('.').pop();
+    // Binary/non-text formats (xlsx, pdf, xml) aren't cheaply header-checkable client-side — skip.
+    if (!expected || !['csv', 'tsv', 'txt'].includes(ext)) {
+      lEl.textContent = '✓ ' + file.name;
+      lEl.className = 'dz-filename valid';
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const firstLine = (reader.result || '').split(/\r?\n/)[0].toUpperCase();
+      const hasAny = expected.some(kw => firstLine.includes(kw));
+      lEl.textContent = (hasAny ? '✓ ' : '⚠ ') + file.name;
+      lEl.className = hasAny ? 'dz-filename valid' : 'dz-filename invalid';
+      if (!hasAny) {
+        lEl.title = `Expected a header containing one of: ${expected.join(', ')} — this file may be the wrong export.`;
+      }
+    };
+    reader.onerror = () => { lEl.textContent = '✓ ' + file.name; lEl.className = 'dz-filename valid'; };
+    reader.readAsText(file.slice(0, 2000)); // just the first chunk is enough for a header check
+  }
+
+  function revealStep2() {
+    document.getElementById('step2-container').classList.remove('step2-hidden');
+  }
+
   zones.forEach(({ zone, input, label }) => {
     const zEl = document.getElementById(zone);
     const iEl = document.getElementById(input);
     const lEl = document.getElementById(label);
 
     iEl.addEventListener('change', () => {
-      lEl.textContent = iEl.files[0] ? '✓ ' + iEl.files[0].name : '';
-      zEl.classList.toggle('has-file', !!iEl.files[0]);
+      const file = iEl.files[0];
+      zEl.classList.toggle('has-file', !!file);
+      if (file) {
+        validateFileInline(file, input, lEl);
+        if (input === 'file-comp') revealStep2();
+      } else {
+        lEl.textContent = ''; lEl.className = 'dz-filename';
+      }
       checkReady();
     });
     zEl.addEventListener('dragover',  e => { e.preventDefault(); zEl.classList.add('drag-over'); });
@@ -986,8 +1948,9 @@
       const file = e.dataTransfer.files[0];
       if (!file) return;
       const dt = new DataTransfer(); dt.items.add(file); iEl.files = dt.files;
-      lEl.textContent = '✓ ' + file.name;
+      validateFileInline(file, input, lEl);
       zEl.classList.add('has-file');
+      if (input === 'file-comp') revealStep2();
       checkReady();
     });
   });
@@ -995,6 +1958,93 @@
   function checkReady() {
     document.getElementById('run-btn').disabled = !document.getElementById('file-comp').files[0];
   }
+
+  // ── Oracle OHIP live connection panel ──────────────────────────────────────
+  document.getElementById('oracle-toggle-btn').addEventListener('click', () => {
+    const panel = document.getElementById('oracle-panel');
+    const visible = panel.style.display !== 'none';
+    panel.style.display = visible ? 'none' : 'block';
+    document.getElementById('oracle-toggle-btn').textContent = visible
+      ? '🔌 Or connect live via Oracle OHIP API instead of uploading a file'
+      : '📋 Or upload an Arrival Details Report file instead';
+  });
+
+  function getOracleFields() {
+    return {
+      ...getSharedCredentials(),
+      start_date: document.getElementById('oracle-start-date').value,
+      end_date:   document.getElementById('oracle-end-date').value,
+    };
+  }
+
+  function oracleFieldsComplete(fields) {
+    // client_secret may be intentionally blank when reusing saved credentials —
+    // the server falls back to the saved secret for this hotel_id in that case.
+    return Object.entries(fields).every(([k, v]) => k === 'client_secret' || v);
+  }
+
+  function pollOracleProgress(progressId, rowEl) {
+    rowEl.style.display = 'block';
+    const interval = setInterval(async () => {
+      try {
+        const resp = await fetch(`/oracle_progress/${progressId}`);
+        const p = await resp.json();
+        if (p.status === 'fetching') {
+          rowEl.textContent = `⏳ Fetching page ${p.page}… ${p.total_fetched} records so far`;
+        } else if (p.status === 'rate_limited') {
+          rowEl.textContent = `⚠ Rate limited by Oracle — backing off (page ${p.page}, ${p.total_fetched} so far)`;
+        } else if (p.status === 'done') {
+          rowEl.textContent = `✓ Fetch complete — ${p.total_fetched} records across ${p.page} page(s)`;
+          clearInterval(interval);
+        } else if (p.status === 'error') {
+          clearInterval(interval);
+        }
+      } catch (e) { /* ignore transient poll errors */ }
+    }, 800);
+    return interval;
+  }
+
+  document.getElementById('oracle-test-btn').addEventListener('click', async () => {
+    const fields = getOracleFields();
+    const resultEl = document.getElementById('oracle-test-result');
+    const progressRow = document.getElementById('oracle-progress-row');
+    if (!oracleFieldsComplete(fields)) {
+      resultEl.textContent = 'Fill in all fields above first.';
+      resultEl.className = 'err';
+      return;
+    }
+    const btn = document.getElementById('oracle-test-btn');
+    btn.disabled = true;
+    resultEl.textContent = 'Testing…';
+    resultEl.className = '';
+    const progressId = 'test-' + Date.now();
+    const pollHandle = pollOracleProgress(progressId, progressRow);
+    try {
+      const resp = await fetch('/fetch_oracle_arrivals', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...fields, progress_id: progressId }),
+      });
+      const data = await resp.json();
+      btn.disabled = false;
+      clearInterval(pollHandle);
+      if (data.error) {
+        resultEl.textContent = '✗ ' + data.error;
+        resultEl.className = 'err';
+      } else if (data.rows === 0) {
+        resultEl.textContent = '⚠ Connected, but no reservations found for this window.';
+        resultEl.className = 'err';
+      } else {
+        resultEl.textContent = `✓ Connected — ${data.rows} rows, ${data.confirmations} reservations (${data.date_range[0]} to ${data.date_range[1]})`;
+        resultEl.className = 'ok';
+      }
+    } catch (e) {
+      clearInterval(pollHandle);
+      btn.disabled = false;
+      resultEl.textContent = '✗ ' + e.message;
+      resultEl.className = 'err';
+    }
+  });
 
   // Run
   document.getElementById('run-btn').addEventListener('click', async () => {
@@ -1012,11 +2062,42 @@
     if (r) fd.append('reservations', r);
     if (b) fd.append('blocks', b);
     if (f) fd.append('folio', f);
-    if (a) fd.append('arrivals', a);
+
+    const webhookUrl = document.getElementById('webhook-url').value.trim();
+    if (webhookUrl) fd.append('webhook_url', webhookUrl);
+
+    const oraclePanelOpen = document.getElementById('oracle-panel').style.display !== 'none';
+    const oracleFields = getOracleFields();
+    let runProgressHandle = null;
+    if (oraclePanelOpen && !a && oracleFieldsComplete(oracleFields)) {
+      fd.append('oracle_environment', oracleFields.environment);
+      fd.append('oracle_hostname', oracleFields.hostname);
+      fd.append('oracle_client_id', oracleFields.client_id);
+      fd.append('oracle_client_secret', oracleFields.client_secret);
+      fd.append('oracle_app_key', oracleFields.app_key);
+      fd.append('oracle_enterprise_id', oracleFields.enterprise_id);
+      fd.append('oracle_hotel_id', oracleFields.hotel_id);
+      fd.append('oracle_start_date', oracleFields.start_date);
+      fd.append('oracle_end_date', oracleFields.end_date);
+      const progressId = 'run-' + Date.now();
+      fd.append('oracle_progress_id', progressId);
+      const spinnerSpan = document.querySelector('#spinner .spinner-wrap span');
+      runProgressHandle = setInterval(async () => {
+        try {
+          const p = await (await fetch(`/oracle_progress/${progressId}`)).json();
+          if (p.status === 'fetching') spinnerSpan.textContent = `Fetching from Oracle — page ${p.page}, ${p.total_fetched} records so far…`;
+          else if (p.status === 'rate_limited') spinnerSpan.textContent = `Oracle rate-limited us — retrying with backoff…`;
+          else if (p.status === 'done') spinnerSpan.textContent = `Oracle fetch complete (${p.total_fetched} records) — running analysis…`;
+        } catch (e) { /* ignore */ }
+      }, 800);
+    } else if (a) {
+      fd.append('arrivals', a);
+    }
 
     try {
       const resp = await fetch('/analyze', { method: 'POST', body: fd });
       const data = await resp.json();
+      if (runProgressHandle) clearInterval(runProgressHandle);
       document.getElementById('spinner').style.display = 'none';
       document.getElementById('run-btn').disabled = false;
 
@@ -1028,6 +2109,7 @@
       window._lastResult = data;  // includes session_id for Monday file uploads
       renderReport(data);
     } catch(e) {
+      if (runProgressHandle) clearInterval(runProgressHandle);
       document.getElementById('spinner').style.display = 'none';
       document.getElementById('run-btn').disabled = false;
       document.getElementById('error-container').innerHTML =
@@ -1037,7 +2119,39 @@
 
   function accClass(v) { return v >= 97 ? 'good' : v >= 90 ? 'warn' : 'bad'; }
 
+  // ── Result tabs ──────────────────────────────────────────────────────────
+  document.querySelectorAll('.result-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.result-tab').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.result-tab-panel').forEach(p => p.style.display = 'none');
+      btn.classList.add('active');
+      document.getElementById(btn.dataset.tab).style.display = 'block';
+    });
+  });
+
+  // ── Discrepancy table search/filter ─────────────────────────────────────────
+  document.getElementById('disc-search').addEventListener('input', (e) => {
+    const q = e.target.value.trim().toLowerCase();
+    const rows = document.querySelectorAll('#disc-tbody tr');
+    let shown = 0;
+    rows.forEach(row => {
+      const match = !q || row.textContent.toLowerCase().includes(q);
+      row.classList.toggle('search-hidden', !match);
+      if (match) shown++;
+    });
+    document.getElementById('disc-search-count').textContent =
+      q ? `${shown} of ${rows.length} rows` : '';
+  });
+
   function renderReport(data) {
+    // Reset to Summary tab on every new report
+    document.querySelectorAll('.result-tab').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.result-tab-panel').forEach(p => p.style.display = 'none');
+    document.querySelector('.result-tab[data-tab="tab-summary"]').classList.add('active');
+    document.getElementById('tab-summary').style.display = 'block';
+    document.getElementById('disc-search').value = '';
+    document.getElementById('disc-search-count').textContent = '';
+
     // Header
     document.getElementById('report-title').textContent =
       `${data.hotel_name} — Duetto vs. PMS Accuracy Review`;
@@ -1060,8 +2174,9 @@
     const xrefSummary = data.arrivals_xref && data.arrivals_xref['__summary__'];
     const xrefCard = document.getElementById('card-xref');
     if (xrefSummary) {
-      const allMatch = xrefSummary.missing_in_duetto === 0 && xrefSummary.extra_in_duetto === 0;
-      const discCount = xrefSummary.missing_in_duetto + xrefSummary.extra_in_duetto;
+      const notDeducting = xrefSummary.not_deducting || 0;
+      const allMatch = xrefSummary.missing_in_duetto === 0 && xrefSummary.extra_in_duetto === 0 && notDeducting === 0;
+      const discCount = xrefSummary.missing_in_duetto + xrefSummary.extra_in_duetto + notDeducting;
       const pmsDiff = (xrefSummary.dva_pms_total != null)
         ? xrefSummary.opera_total - xrefSummary.dva_pms_total : null;
       const hasGap = pmsDiff !== null && pmsDiff !== 0;
@@ -1073,7 +2188,7 @@
         ? `${xrefSummary.matched} / ${xrefSummary.opera_total}`
         : `${discCount} gap${discCount !== 1 ? 's' : ''}`;
 
-      let sub = allMatch ? 'Opera & Duetto agree' : `${xrefSummary.missing_in_duetto} missing · ${xrefSummary.extra_in_duetto} extra`;
+      let sub = allMatch ? 'Opera & Duetto agree' : `${xrefSummary.missing_in_duetto} missing · ${notDeducting} not deducting · ${xrefSummary.extra_in_duetto} extra`;
       if (hasGap) sub += ` · DVA PMS shows ${xrefSummary.dva_pms_total} (${pmsDiff > 0 ? '+' : ''}${pmsDiff} vs Opera)`;
       document.getElementById('sub-xref').textContent = sub;
       xrefCard.style.display = 'flex';
@@ -1151,6 +2266,13 @@
       reconPanel.style.display = 'none';
     }
 
+    // Reconciliation tab only appears when arrivals data was analyzed
+    document.getElementById('tab-btn-recon').style.display = xrefSummary ? 'inline-block' : 'none';
+
+    // Discrepancy count badge on the tab
+    const discBadge = document.getElementById('tab-badge-disc');
+    discBadge.textContent = data.discrepancies.length ? data.discrepancies.length : '';
+
     // Table
     const tbody = document.getElementById('disc-tbody');
     tbody.innerHTML = '';
@@ -1223,13 +2345,16 @@
 
     if (summary) {
       const xrefDates = Object.keys(xref).filter(k => k !== '__summary__').sort();
-      const clean = summary.missing_in_duetto === 0 && summary.extra_in_duetto === 0;
+      const notDeducting = summary.not_deducting || 0;
+      const clean = summary.missing_in_duetto === 0 && summary.extra_in_duetto === 0 && notDeducting === 0;
 
       // Summary row — always shown
       let html = `<div class="xref-summary">`;
       html += `<span class="xref-badge xref-badge-blue">${summary.opera_total} Opera Arrivals</span>`;
       html += `<span class="xref-badge xref-badge-blue">${summary.duetto_total} Duetto Bookings</span>`;
       html += `<span class="xref-badge ${clean ? 'xref-badge-green' : 'xref-badge-red'}">${summary.matched} Matched</span>`;
+      if (notDeducting > 0)
+        html += `<span class="xref-badge xref-badge-amber">${notDeducting} Not Deducting</span>`;
       if (summary.rate_mismatches > 0)
         html += `<span class="xref-badge xref-badge-amber">${summary.rate_mismatches} Rate Mismatches</span>`;
       html += `</div>`;
@@ -1411,6 +2536,7 @@
       btn.textContent = 'Submit';
     }
   }
+
 </script>
 </body>
 </html>

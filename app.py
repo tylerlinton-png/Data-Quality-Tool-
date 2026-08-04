@@ -4,6 +4,8 @@ import json
 import base64
 import datetime
 import uuid
+import sqlite3
+import os
 import urllib.request
 import urllib.parse
 import urllib.error
@@ -22,6 +24,234 @@ app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024
 _file_store = {}
 
 TODAY = datetime.date.today()
+
+# ── Run history (SQLite) ──────────────────────────────────────────────────────
+DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'dqe_history.db')
+
+
+def get_db():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def init_db():
+    conn = get_db()
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS runs (
+            id             TEXT PRIMARY KEY,
+            hotel_name     TEXT,
+            hotel_id       TEXT,
+            analysis_date  TEXT,
+            date_range     TEXT,
+            room_accuracy  REAL,
+            rev_accuracy   REAL,
+            total_days     INTEGER,
+            discrepancy_count INTEGER,
+            result_json    TEXT,
+            created_at     TEXT
+        )
+    ''')
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS oracle_credentials (
+            hotel_id       TEXT,
+            environment    TEXT NOT NULL DEFAULT 'prod',
+            hostname       TEXT,
+            client_id      TEXT,
+            client_secret  TEXT,
+            app_key        TEXT,
+            enterprise_id  TEXT,
+            updated_at     TEXT,
+            PRIMARY KEY (hotel_id, environment)
+        )
+    ''')
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS readiness_checks (
+            id           TEXT PRIMARY KEY,
+            hotel_id     TEXT,
+            checked_at   TEXT,
+            results_json TEXT
+        )
+    ''')
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS app_settings (
+            key   TEXT PRIMARY KEY,
+            value TEXT
+        )
+    ''')
+
+    # Migration: older installs had oracle_credentials keyed only on hotel_id
+    # (no environment column, no composite key). Detect and upgrade in place,
+    # defaulting all existing rows to the 'prod' environment.
+    cols = [r['name'] for r in conn.execute('PRAGMA table_info(oracle_credentials)').fetchall()]
+    if 'environment' not in cols:
+        conn.execute('ALTER TABLE oracle_credentials RENAME TO oracle_credentials_old')
+        conn.execute('''
+            CREATE TABLE oracle_credentials (
+                hotel_id       TEXT,
+                environment    TEXT NOT NULL DEFAULT 'prod',
+                hostname       TEXT,
+                client_id      TEXT,
+                client_secret  TEXT,
+                app_key        TEXT,
+                enterprise_id  TEXT,
+                updated_at     TEXT,
+                PRIMARY KEY (hotel_id, environment)
+            )
+        ''')
+        conn.execute('''
+            INSERT INTO oracle_credentials (hotel_id, environment, hostname, client_id, client_secret, app_key, enterprise_id, updated_at)
+            SELECT hotel_id, 'prod', hostname, client_id, client_secret, app_key, enterprise_id, updated_at FROM oracle_credentials_old
+        ''')
+        conn.execute('DROP TABLE oracle_credentials_old')
+        print('[migration] oracle_credentials upgraded to (hotel_id, environment) — existing rows defaulted to prod')
+
+    conn.commit()
+    conn.close()
+
+
+def save_readiness_check(hotel_id, results):
+    check_id = str(uuid.uuid4())
+    conn = get_db()
+    conn.execute(
+        'INSERT INTO readiness_checks (id, hotel_id, checked_at, results_json) VALUES (?, ?, ?, ?)',
+        (check_id, hotel_id, datetime.datetime.now().isoformat(), json.dumps(results))
+    )
+    conn.commit()
+    conn.close()
+    return check_id
+
+
+def list_readiness_checks(hotel_id, limit=10):
+    conn = get_db()
+    rows = conn.execute(
+        'SELECT id, hotel_id, checked_at, results_json FROM readiness_checks '
+        'WHERE hotel_id = ? ORDER BY checked_at DESC LIMIT ?', (hotel_id, limit)
+    ).fetchall()
+    conn.close()
+    return [{'id': r['id'], 'hotel_id': r['hotel_id'], 'checked_at': r['checked_at'],
+              'results': json.loads(r['results_json'])} for r in rows]
+
+
+def save_run(result: dict) -> str:
+    run_id = str(uuid.uuid4())
+    conn = get_db()
+    conn.execute(
+        'INSERT INTO runs (id, hotel_name, hotel_id, analysis_date, date_range, '
+        'room_accuracy, rev_accuracy, total_days, discrepancy_count, result_json, created_at) '
+        'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        (
+            run_id,
+            result.get('hotel_name', ''),
+            result.get('hotel_id', ''),
+            result.get('analysis_date', ''),
+            result.get('date_range', ''),
+            result.get('room_accuracy', 0),
+            result.get('rev_accuracy', 0),
+            result.get('total_days', 0),
+            len(result.get('discrepancies', [])),
+            json.dumps(result),
+            datetime.datetime.now().isoformat(),
+        )
+    )
+    conn.commit()
+    conn.close()
+    return run_id
+
+
+def list_runs(limit=50, hotel_id=None):
+    conn = get_db()
+    if hotel_id:
+        rows = conn.execute(
+            'SELECT id, hotel_name, hotel_id, analysis_date, date_range, room_accuracy, '
+            'rev_accuracy, total_days, discrepancy_count, created_at FROM runs '
+            'WHERE hotel_id = ? ORDER BY created_at DESC LIMIT ?', (hotel_id, limit)
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            'SELECT id, hotel_name, hotel_id, analysis_date, date_range, room_accuracy, '
+            'rev_accuracy, total_days, discrepancy_count, created_at FROM runs '
+            'ORDER BY created_at DESC LIMIT ?', (limit,)
+        ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def get_run(run_id):
+    conn = get_db()
+    row = conn.execute('SELECT result_json FROM runs WHERE id = ?', (run_id,)).fetchone()
+    conn.close()
+    if not row:
+        return None
+    return json.loads(row['result_json'])
+
+
+def get_hotel_trend(hotel_id, limit=20):
+    conn = get_db()
+    rows = conn.execute(
+        'SELECT analysis_date, room_accuracy, rev_accuracy, created_at FROM runs '
+        'WHERE hotel_id = ? ORDER BY created_at ASC LIMIT ?', (hotel_id, limit)
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def save_oracle_credentials(hotel_id, hostname, client_id, client_secret, app_key, enterprise_id, environment='prod'):
+    conn = get_db()
+    conn.execute(
+        'INSERT INTO oracle_credentials (hotel_id, environment, hostname, client_id, client_secret, app_key, enterprise_id, updated_at) '
+        'VALUES (?, ?, ?, ?, ?, ?, ?, ?) '
+        'ON CONFLICT(hotel_id, environment) DO UPDATE SET hostname=excluded.hostname, client_id=excluded.client_id, '
+        'client_secret=excluded.client_secret, app_key=excluded.app_key, enterprise_id=excluded.enterprise_id, '
+        'updated_at=excluded.updated_at',
+        (hotel_id, environment, hostname, client_id, client_secret, app_key, enterprise_id, datetime.datetime.now().isoformat())
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_oracle_credentials(hotel_id, environment='prod'):
+    conn = get_db()
+    row = conn.execute(
+        'SELECT hostname, client_id, client_secret, app_key, enterprise_id, environment '
+        'FROM oracle_credentials WHERE hotel_id = ? AND environment = ?',
+        (hotel_id, environment)
+    ).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def list_hotel_environments(hotel_id):
+    """All saved environments (Prod/Demo/etc.) for one hotel."""
+    conn = get_db()
+    rows = conn.execute(
+        'SELECT environment FROM oracle_credentials WHERE hotel_id = ? ORDER BY environment', (hotel_id,)
+    ).fetchall()
+    conn.close()
+    return [r['environment'] for r in rows]
+
+
+def set_last_used_credentials(hotel_id, environment):
+    """No hotel directory — just a single pointer to whichever (hotel_id,
+    environment) pair was most recently validated, so Step 1 can prefill."""
+    conn = get_db()
+    conn.execute(
+        "INSERT INTO app_settings (key, value) VALUES ('last_credentials', ?) "
+        "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+        (json.dumps({'hotel_id': hotel_id, 'environment': environment}),)
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_last_used_credentials():
+    conn = get_db()
+    row = conn.execute("SELECT value FROM app_settings WHERE key = 'last_credentials'").fetchone()
+    conn.close()
+    return json.loads(row['value']) if row else None
+
+
+init_db()
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
@@ -450,17 +680,723 @@ def parse_arrival_details_pdf(raw: bytes) -> pd.DataFrame:
     return pd.DataFrame(records)
 
 
+# ── Oracle OHIP live API fetch (alternate to manual Arrivals Detail export) ──
+# Adapted from Nicolas Brantes' Duetto_DataQuality tool — pulls reservations
+# directly from Oracle OHIP instead of requiring a manually exported report.
+
+# Static Oracle OHIP app keys, per the Technical Support Playbook — same for
+# every customer, no need to ask an analyst to type these in.
+ORACLE_APP_KEYS = {
+    'prod': 'c695179c-d600-4569-91ac-f87a1ec99d51',
+    'demo': 'f5fda1cf-8cce-4ef9-9649-7f5dddade0d1',
+}
+
+
+def get_oracle_oauth_token(hostname, client_id, client_secret, app_key, enterprise_id=None,
+                            auth_type='ocim', username=None, password=None):
+    """
+    Fetch an OAuth token from Oracle OHIP.
+    auth_type='ocim' (default): client_credentials grant — app-level auth via
+      CLIENT_ID/CLIENT_SECRET (Basic Auth) + enterprise_id header. Most common
+      historically for our own integration jobs.
+    auth_type='ssd': password grant — user-level auth via username/password in
+      the request body, still using CLIENT_ID/CLIENT_SECRET for Basic Auth.
+      No enterprise_id header per the playbook (OCIM-only field).
+    """
+    if not hostname.startswith('https://'):
+        hostname = f'https://{hostname}'
+    hostname = hostname.rstrip('/')
+    token_url = f'{hostname}/oauth/v1/tokens'
+
+    if auth_type == 'ssd':
+        if not username or not password:
+            return None, 'SSD auth requires both username and password'
+        payload = urllib.parse.urlencode({
+            'grant_type': 'password',
+            'username': username.strip(),
+            'password': password.strip(),
+            'scope': 'urn:opc:hgbu:ws:__myscopes__',
+        }).encode()
+    else:
+        payload = b'grant_type=client_credentials&scope=urn%3Aopc%3Ahgbu%3Aws%3A__myscopes__'
+
+    req = urllib.request.Request(token_url, data=payload, method='POST')
+    req.add_header('Content-Type', 'application/x-www-form-urlencoded')
+    req.add_header('x-app-key', app_key.strip())
+    if auth_type == 'ocim' and enterprise_id:
+        req.add_header('enterpriseId', enterprise_id.strip())
+    basic = base64.b64encode(f'{client_id.strip()}:{client_secret.strip()}'.encode()).decode()
+    req.add_header('Authorization', f'Basic {basic}')
+
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            token_data = json.loads(resp.read().decode())
+            access_token = token_data.get('access_token')
+            if access_token:
+                return access_token, None
+            return None, 'Access token not found in response'
+    except urllib.error.HTTPError as e:
+        return None, f'HTTP {e.code}: {e.read().decode(errors="replace")}'
+    except urllib.error.URLError as e:
+        return None, f'Connection error - Unable to reach Oracle server: {e.reason}'
+    except Exception as e:
+        return None, f'OAuth Error: {e}'
+
+
+PSEUDO_ROOM_TYPES_ORACLE = {'PM', 'PS', 'POS', 'PSE', 'PI'}
+
+# In-memory progress tracker for long-running Oracle fetches, keyed by a
+# client-supplied progress_id and polled via GET /oracle_progress/<id>.
+_oracle_progress = {}
+
+
+def fetch_oracle_reservations(hostname, access_token, app_key, enterprise_id, hotel_id,
+                               start_date_str, end_date_str, max_records=5000, progress_id=None):
+    """
+    Fetch reservations from Oracle OHIP for the given stay window, with
+    pagination and exponential backoff on 429 rate-limit responses.
+    Returns a DataFrame in the same schema as the other arrival-details parsers
+    (one row per stay night), with pseudo/PM rooms already filtered out.
+    If progress_id is given, page-by-page progress is written to
+    _oracle_progress[progress_id] for polling by /oracle_progress/<id>.
+    """
+    import time as _time
+
+    def _report(status, page=0, total=0):
+        if progress_id:
+            _oracle_progress[progress_id] = {'status': status, 'page': page, 'total_fetched': total}
+
+    if not hostname.startswith('https://'):
+        hostname = f'https://{hostname}'
+    hostname = hostname.rstrip('/')
+    rsv_url = f'{hostname}/rsv/v1/hotels/{hotel_id.strip()}/reservations'
+
+    all_reservations = []
+    offset = 0
+    limit = 200
+    page_count = 0
+    departure_start = (pd.to_datetime(start_date_str) + datetime.timedelta(days=1)).strftime('%Y-%m-%d')
+
+    _report('fetching', 0, 0)
+
+    while True:
+        page_count += 1
+        params = urllib.parse.urlencode({
+            'arrivalEndDate': end_date_str,
+            'departureStartDate': departure_start,
+            'limit': limit,
+            'offset': offset,
+        })
+        req = urllib.request.Request(f'{rsv_url}?{params}', method='GET')
+        req.add_header('Authorization', f'Bearer {access_token}')
+        req.add_header('x-app-key', app_key.strip())
+        req.add_header('x-hotelid', hotel_id.strip())
+        # NOTE: per the real OHIP Postman collection, enterpriseId is only sent
+        # on the OAuth token request — not on data calls like this one.
+        req.add_header('Accept', 'application/json')
+
+        retry_count, wait_time, max_retries = 0, 2, 5
+        while True:
+            try:
+                _report('fetching', page_count, len(all_reservations))
+                with urllib.request.urlopen(req, timeout=60) as resp:
+                    data = json.loads(resp.read().decode())
+                break
+            except urllib.error.HTTPError as e:
+                if e.code == 429 and retry_count < max_retries:
+                    retry_count += 1
+                    _report('rate_limited', page_count, len(all_reservations))
+                    _time.sleep(wait_time)
+                    wait_time *= 2
+                    continue
+                _report('error', page_count, len(all_reservations))
+                raise Exception(f'Reservation fetch failed (HTTP {e.code}): {e.read().decode(errors="replace")}')
+
+        reservations = data.get('reservations', {}).get('reservationInfo', [])
+        if not reservations:
+            break
+        all_reservations.extend(reservations)
+        _report('fetching', page_count, len(all_reservations))
+        if len(reservations) < limit or len(all_reservations) > max_records:
+            break
+        offset += limit
+        _time.sleep(0.5)
+
+    _report('done', page_count, len(all_reservations))
+
+    records = []
+    for res in all_reservations:
+        status = str(res.get('computedReservationStatus', '')).upper().replace('_', ' ').strip()
+        if any(x in status for x in ['CANCEL', 'NO SHOW', 'NOSHOW', 'DAY CANCEL']):
+            continue
+
+        room_stay = res.get('roomStay', {})
+        num_rooms = int(room_stay.get('numberOfRooms', 1))
+        if num_rooms == 0:
+            continue
+
+        room_type = str(room_stay.get('roomType', '')).upper().strip()
+        room_class = str(room_stay.get('roomClass', '')).upper().strip()
+        is_pseudo = room_stay.get('pseudoRoom', False) or room_type in PSEUDO_ROOM_TYPES_ORACLE or room_class in PSEUDO_ROOM_TYPES_ORACLE
+        if is_pseudo:
+            continue
+
+        conf = None
+        for item in res.get('reservationIdList', []):
+            item_type = str(item.get('type', '')).upper()
+            if item_type in ('RESERVATION', 'ID', 'RESERVATIONID') or (item_type != 'CONFIRMATION' and conf is None):
+                conf = str(item['id']).strip()
+                if item_type == 'RESERVATION':
+                    break
+
+        rate = float(room_stay.get('rateAmount', {}).get('amount', 0))
+        arr_s = room_stay.get('arrivalDate', '')
+        dep_s = room_stay.get('departureDate', '')
+        try:
+            arr = pd.to_datetime(arr_s).date()
+            dep = pd.to_datetime(dep_s).date()
+        except Exception:
+            continue
+
+        stay = arr
+        while stay < dep:
+            records.append({
+                'CONFIRMATION_NO': conf or '',
+                'STATUS':          status,
+                'STAY_DATE':       stay,
+                'ARRIVAL':         arr,
+                'DEPARTURE':       dep,
+                'NO_OF_ROOMS':     num_rooms,
+                'RATE_AMOUNT':     rate,
+                'IS_SHARED':       'N',
+                'BLOCK_CODE':      '',
+                'ROOM_CATEGORY':   room_type,
+            })
+            stay += datetime.timedelta(days=1)
+
+    if not records:
+        return pd.DataFrame()
+    return pd.DataFrame(records)
+
+
+# ── Generic OHIP "Browse Data" fetch (Postman-replacement mode) ─────────────
+# Endpoint paths, query params, and headers below are taken directly from the
+# real "Deployment OHIP SSD & OCIM" Postman collection — not guessed. Folio's
+# response wrapper key has no example in the collection, so it's best-effort
+# with a fallback scan (see _extract_records) in case the real key differs.
+OHIP_ENDPOINTS = {
+    'reservations': {
+        'path': '/rsv/v1/hotels/{hotel_id}/reservations',
+        'response_paths': [['reservations', 'reservationInfo']],
+        'requires_ext_system': False,
+        'single_page': False,
+        'query': lambda hotel_id, start, end, ext_system, extra: (
+            {'arrivalEndDate': end, 'departureStartDate': (pd.to_datetime(start) + datetime.timedelta(days=1)).strftime('%Y-%m-%d')}
+            if start and end else {}
+        ),
+    },
+    'blocks': {
+        # hotelId is a QUERY param here, not part of the path — confirmed from
+        # the real collection ("get Blocks by Dates" / "get Blocks by BlockCode").
+        'path': '/blk/v1/blocks',
+        'response_paths': [['blocks', 'blockInfo']],  # response shape unconfirmed for the sync endpoint; falls back to scan
+        'requires_ext_system': True,
+        'single_page': False,
+        'query': lambda hotel_id, start, end, ext_system, extra: {
+            'fetchInstructions': 'Block',
+            'hotelId': hotel_id,
+            **({'blockStartStartDate': start, 'blockStartEndDate': end} if start and end else {}),
+        },
+    },
+    'rates': {
+        'path': '/rtp/v1/hotels/{hotel_id}/ratePlans',
+        'response_paths': [['ratePlanShortInfoList', 'ratePlanShortInfo'], ['ratePlans']],
+        'requires_ext_system': True,
+        'single_page': True,  # confirmed live: no offset/limit in the real request, returns everything at once
+        'query': lambda hotel_id, start, end, ext_system, extra: {
+            'fetchInstructions': ['Packages', 'PrimaryDetails', 'RateControls', 'TransactionDetails'],
+        },
+    },
+    'folio': {
+        'path': '/csh/v1/hotels/{hotel_id}/financialPostings',
+        # Confirmed live against a real hotel (2026-08-04): response shape is
+        # {"journalPostings": {"postings": [...], ...}, "totalResults": N, ...}
+        'response_paths': [['journalPostings', 'postings']],
+        'requires_ext_system': False,
+        'single_page': False,
+        'query': lambda hotel_id, start, end, ext_system, extra: (
+            {'startDate': start, 'endDate': end} if start and end else {}
+        ),
+    },
+    'room_types': {
+        'path': '/lov/v1/listOfValues/hotels/{hotel_id}/roomTypes',
+        'response_paths': [['listOfValues', 'items']],
+        'requires_ext_system': False,
+        'single_page': True,
+        'query': lambda hotel_id, start, end, ext_system, extra: {},
+    },
+    'transaction_codes': {
+        # Confirmed via example response in the real collection: {"listOfValues": {"items": [...]}}
+        # Lets analysts decode the cryptic folio transactionCode (e.g. "90411") into a real description.
+        'path': '/lov/v1/listOfValues/hotels/{hotel_id}/transactionCodes',
+        'response_paths': [['listOfValues', 'items']],
+        'requires_ext_system': False,
+        'single_page': True,
+        'query': lambda hotel_id, start, end, ext_system, extra: {},
+    },
+    'group_arrivals': {
+        'path': '/lov/v1/listOfValues/hotels/{hotel_id}/groupArrivals',
+        'response_paths': [['listOfValues', 'items']],
+        'requires_ext_system': False,
+        'single_page': True,
+        'query': lambda hotel_id, start, end, ext_system, extra: {'includeInactiveFlag': 'false'},
+    },
+    'block_status_codes': {
+        # Not hotel-specific in the real collection — path has no {hotel_id} segment.
+        'path': '/blk/config/v1/blockStatusCodes',
+        'response_paths': [],  # no example in the collection — falls back to scanning the payload
+        'requires_ext_system': False,
+        'single_page': True,
+        'query': lambda hotel_id, start, end, ext_system, extra: {'inUse': 'true'},
+    },
+    'hotel_info': {
+        # Also not hotel-specific in the path — it's a portfolio-level LOV call.
+        'path': '/lov/v1/listOfValues/Hotels',
+        'response_paths': [['listOfValues', 'items']],
+        'requires_ext_system': False,
+        'single_page': True,
+        'query': lambda hotel_id, start, end, ext_system, extra: {
+            'parameterName': 'ConfigurableHotelsYN', 'parameterValue': 'Y', 'includeInactiveFlag': 'false',
+        },
+    },
+    'restrictions': {
+        # hotelId appears in both the path AND as a query param — confirmed
+        # from the real collection request URL, not a typo.
+        'path': '/par/v1/hotels/{hotel_id}/restrictions',
+        # Confirmed live (2026-08-04): unusual double-nested key —
+        # {"restrictionsByDateRange": {"restrictionsByDateRange": {"restrictionSets": [...]}}}
+        'response_paths': [['restrictionsByDateRange', 'restrictionsByDateRange', 'restrictionSets']],
+        'requires_ext_system': False,
+        'single_page': True,
+        'query': lambda hotel_id, start, end, ext_system, extra: {
+            'hotelId': hotel_id,
+            **({'restrictionSearchCriteriaStartDate': start, 'end': end} if start and end else {}),
+        },
+    },
+    'rate_plan_schedules': {
+        # Requires an additional required field: rate_plan_code (drill-down from Rates).
+        'path': '/rtp/v1/hotels/{hotel_id}/ratePlans/{rate_plan_code}/schedules',
+        'response_paths': [['ratePlanScheduleList', 'ratePlanSchedule'], ['ratePlans']],
+        'requires_ext_system': False,
+        'single_page': True,
+        'query': lambda hotel_id, start, end, ext_system, extra: {'includeInactive': 'false', 'limit': 5000},
+    },
+    'opera_cloud_version': {
+        # Not hotel-scoped at all — a system/version status check, used by the
+        # Deployment Readiness Check. hotel_id is still accepted for UI/credential
+        # consistency but unused in the request itself.
+        'path': '/lov/v1/services/listOfValues/status',
+        'response_paths': [],  # no example in the collection — falls back to scanning the payload
+        'requires_ext_system': False,
+        'single_page': True,
+        'query': lambda hotel_id, start, end, ext_system, extra: {},
+    },
+}
+
+
+_FALLBACK_SCAN_IGNORE_KEYS = {'links', '_links', 'href', 'warnings', 'errors', 'messages'}
+
+
+def _extract_records(data, response_paths):
+    """
+    Try each known response_path in turn. If a path resolves to an actual
+    list — even an EMPTY one — that's authoritative and returned as-is: an
+    empty list is a legitimate "no records for this query" result, not a
+    signal to guess elsewhere. Only fall back to scanning the payload for
+    *some* list when none of the known paths resolve to a list at all (i.e.
+    the response schema doesn't match what we expected), and even then,
+    HATEOAS-style keys like 'links'/'href' are excluded so we don't mistake
+    navigation metadata for data records.
+    """
+    for path in response_paths:
+        node = data
+        found = True
+        for key in path:
+            if isinstance(node, dict) and key in node:
+                node = node[key]
+            else:
+                found = False
+                break
+        if found and isinstance(node, list):
+            return node
+
+    if isinstance(data, list):
+        return data
+    if isinstance(data, dict):
+        for k, v in data.items():
+            if k in _FALLBACK_SCAN_IGNORE_KEYS:
+                continue
+            if isinstance(v, list) and v:
+                return v
+            if isinstance(v, dict):
+                for k2, v2 in v.items():
+                    if k2 in _FALLBACK_SCAN_IGNORE_KEYS:
+                        continue
+                    if isinstance(v2, list) and v2:
+                        return v2
+        # Last resort: some endpoints (e.g. Opera Cloud Version) return a
+        # single flat status object, not a list at all —
+        # {"operaVersion": "26.2.2.0", "timeStamp": "..."}. Treat that whole
+        # object as one record rather than reporting zero results.
+        meaningful = {k: v for k, v in data.items() if k not in _FALLBACK_SCAN_IGNORE_KEYS}
+        has_scalar_content = any(not isinstance(v, (dict, list)) for v in meaningful.values())
+        if meaningful and has_scalar_content:
+            return [data]
+    return []
+
+
+# ── Human-readable formatting for Browse Data results ────────────────────────
+# Raw OHIP payloads are deeply nested and hard to scan (this is the exact
+# complaint that prompted this section — "folio isn't readable, but none of
+# it is"). We flatten each record to dot-path columns, then narrow to a
+# curated, sensible column set per data_type based on real fields observed
+# against a live hotel. Analysts can still toggle "Show all fields" to see
+# the fully flattened record if the curated view is missing something.
+
+def _humanize_column(path):
+    """'guestInfo.guestName' -> 'Guest Name', 'block.blockCode' -> 'Block Code'"""
+    last = path.split('.')[-1]
+    words = re.sub(r'([a-z0-9])([A-Z])', r'\1 \2', last)
+    words = words.replace('_', ' ')
+    return words[:1].upper() + words[1:]
+
+
+def _flatten_record(obj, prefix='', max_depth=3, _depth=0):
+    """
+    Flatten a nested dict to {dot.path: value}. Lists of scalars are joined
+    with commas; lists of dicts are summarized as a count plus a preview of
+    an identifying field (code/id/description/name) rather than dumped raw.
+    Stops descending past max_depth to avoid absurdly wide sparse tables.
+    """
+    out = {}
+    if not isinstance(obj, dict):
+        return {prefix.rstrip('.'): obj}
+
+    for key, val in obj.items():
+        path = f'{prefix}{key}'
+        if isinstance(val, dict):
+            if _depth >= max_depth:
+                out[path] = f'{{{len(val)} field(s)}}' if val else ''
+            else:
+                out.update(_flatten_record(val, path + '.', max_depth, _depth + 1))
+        elif isinstance(val, list):
+            if not val:
+                out[path] = ''
+            elif all(not isinstance(v, (dict, list)) for v in val):
+                out[path] = ', '.join(str(v) for v in val)
+            else:
+                id_key = next((k for k in ('code', 'id', 'description', 'name') if isinstance(val[0], dict) and k in val[0]), None)
+                if id_key:
+                    preview = ', '.join(str(v.get(id_key, '')) for v in val[:3] if isinstance(v, dict))
+                    out[path] = f'{len(val)} item(s): {preview}' + (', …' if len(val) > 3 else '')
+                else:
+                    out[path] = f'{len(val)} item(s)'
+        else:
+            out[path] = val
+    return out
+
+
+# Curated column order per data_type, based on real fields confirmed live
+# against a production hotel (2026-08-04). Falls back to all flattened
+# columns (alphabetical) if a record doesn't have these, or via "Show all
+# fields" in the UI.
+PREFERRED_COLUMNS = {
+    'folio': [
+        'postingDate', 'guestInfo.guestName', 'guestInfo.confirmationNo', 'guestInfo.roomId',
+        'transactionType', 'transactionCode', 'transactionCodeName', 'postedAmount.amount', 'postedAmount.currencyCode',
+        'reference', 'folioWindowNo',
+    ],
+    'blocks': [
+        'block.blockCode', 'block.blockName', 'block.blockStatus.status.description',
+        'block.startDate', 'block.endDate', 'block.actualRooms', 'block.deductInventory', 'block.hotelId',
+    ],
+    'rates': [
+        'ratePlanCode', 'primaryDetails.description.defaultText', 'classifications.rateCategory',
+        'classifications.marketCode', 'primaryDetails.startSellDate', 'primaryDetails.endSellDate',
+        'hotelId',
+    ],
+    'reservations': [
+        '_confirmationNo', 'computedReservationStatus', 'hotelName',
+        'roomStay.arrivalDate', 'roomStay.departureDate', 'roomStay.roomType',
+        'roomStay.numberOfRooms', 'roomStay.rateAmount.amount',
+        'createDateTime', 'lastModifyDateTime',
+    ],
+    # LOV-style endpoints share the same item shape, confirmed live via
+    # Transaction Codes: {"code": ..., "name": ..., "description": ..., "active": ...}
+    'room_types':         ['code', 'name', 'description', 'active'],
+    'transaction_codes':  ['code', 'name', 'description', 'active'],
+    'group_arrivals':     ['code', 'name', 'description', 'active'],
+    'hotel_info':         ['code', 'name', 'description', 'active'],
+    # No example response for these two — preferred columns are best-effort;
+    # falls back to the first 10 flattened columns automatically if wrong.
+    # Confirmed live (2026-08-04): {"status": {"code": ..., "description": ...}, "color": ..., ...}
+    'block_status_codes': ['status.code', 'status.description', 'color', 'managedBy', 'inUse', 'cateringInUse'],
+    # Confirmed live (2026-08-04)
+    'restrictions': [
+        'restrictionStatus.code', 'restrictionControl.ratePlanCode', 'restrictionControl.house',
+        'start', 'end', 'actualTimeSpan.startDate', 'actualTimeSpan.endDate', 'onRequest',
+    ],
+    # Confirmed live (2026-08-04)
+    'rate_plan_schedules': [
+        'ratePlanScheduleId.id', 'ratePlanScheduleDetail.start', 'ratePlanScheduleDetail.end',
+        'ratePlanScheduleDetail.roomTypeList', 'ratePlanScheduleDetail.rateAmounts.onePersonRate',
+        'ratePlanScheduleDetail.rateAmounts.twoPersonRate',
+    ],
+}
+
+DATA_TYPE_LABELS = {
+    'reservations': 'Reservations',
+    'blocks': 'Blocks',
+    'rates': 'Rate Plans',
+    'folio': 'Folio',
+    'room_types': 'Room Types',
+    'transaction_codes': 'Transaction Codes',
+    'group_arrivals': 'Group Arrivals',
+    'block_status_codes': 'Block Status Codes',
+    'hotel_info': 'Hotel Info',
+    'restrictions': 'Restrictions',
+    'rate_plan_schedules': 'Rate Plan Schedules',
+    'opera_cloud_version': 'Opera Cloud Version',
+}
+
+# ── Role catalog — UX-only separation, not a security boundary ──────────────
+# Each team sees a curated subset of Browse Data + which top-level modes
+# apply to their workflow. This is config, not code — adding a new team later
+# is a new dict entry, not a new route or a hardcoded UI branch.
+ROLE_CATALOG = {
+    'dqe': {
+        'label': 'DQE',
+        'modes': ['analyze', 'browse'],
+        'browse_data_types': ['blocks', 'folio'],
+    },
+    'deployment': {
+        # Deployment's only tool is the Config Snapshot — it already covers all 5
+        # reference/config data types with full download, so a separate Browse
+        # Data tab for the same endpoints would just be a redundant second path
+        # to the same data.
+        'label': 'Deployment',
+        'modes': ['readiness'],
+        'browse_data_types': [],
+    },
+}
+
+# The 5 calls a deployment engineer wants to see checked together for a hotel
+# that's about to go live. No pass/fail judgment is made here — this just
+# collects what each call returns; the human decides if anything looks wrong.
+DEPLOYMENT_READINESS_TYPES = [
+    'opera_cloud_version', 'block_status_codes', 'transaction_codes', 'room_types', 'hotel_info',
+]
+
+
+def run_readiness_check(hostname, access_token, app_key, enterprise_id, hotel_id, ext_system_code='DUETTO1'):
+    """
+    Fire all 5 Deployment Readiness data types for one hotel and collect the
+    results — no pass/fail verdict, just what came back (or an error) per call,
+    so a deployment engineer can eyeball whether the hotel looks configured.
+    """
+    results = []
+    for data_type in DEPLOYMENT_READINESS_TYPES:
+        entry = {'data_type': data_type, 'label': DATA_TYPE_LABELS.get(data_type, data_type)}
+        try:
+            records = fetch_oracle_raw(
+                data_type, hostname, access_token, app_key, enterprise_id, hotel_id,
+                ext_system_code=ext_system_code,
+            )
+            display_records, preferred_columns, all_columns = format_records_for_display(data_type, records)
+            entry['status'] = 'ok'
+            entry['count'] = len(records)
+            entry['preview'] = display_records[:3]
+            entry['preview_columns'] = preferred_columns or all_columns[:5]
+            # Full dataset, not just the 3-row preview — lets the UI offer a
+            # direct download instead of sending the analyst to Browse Data
+            # for the exact same call.
+            entry['records'] = display_records
+            entry['all_columns'] = all_columns
+        except Exception as e:
+            entry['status'] = 'error'
+            entry['count'] = 0
+            entry['error'] = str(e)
+        results.append(entry)
+    return results
+
+
+def _prep_reservation_for_display(rec):
+    """Inject a synthetic, human confirmation number field before flattening
+    — mirrors the extraction logic already used for the comparison engine."""
+    conf = None
+    for item in rec.get('reservationIdList', []):
+        item_type = str(item.get('type', '')).upper()
+        if item_type in ('RESERVATION', 'ID', 'RESERVATIONID') or (item_type != 'CONFIRMATION' and conf is None):
+            conf = str(item.get('id', '')).strip()
+            if item_type == 'RESERVATION':
+                break
+    rec = dict(rec)
+    rec['_confirmationNo'] = conf or ''
+    return rec
+
+
+def enrich_folio_transaction_names(records, hostname, access_token, app_key, enterprise_id, hotel_id):
+    """
+    Folio postings only carry the raw transactionCode (e.g. "90411"); look up
+    the Transaction Codes LOV for this hotel and stamp a transactionCodeName
+    onto each record so analysts don't have to cross-reference it by hand.
+    """
+    try:
+        code_records = fetch_oracle_raw(
+            'transaction_codes', hostname, access_token, app_key, enterprise_id, hotel_id,
+            None, None,
+        )
+    except Exception as e:
+        print(f"[folio enrichment] transaction_codes lookup failed: {e}")
+        return records
+
+    name_by_code = {str(c.get('code')): c.get('name') for c in code_records if c.get('code') is not None}
+    for r in records:
+        code = str(r.get('transactionCode')) if r.get('transactionCode') is not None else None
+        if code and code in name_by_code:
+            r['transactionCodeName'] = name_by_code[code]
+    return records
+
+
+def format_records_for_display(data_type, records):
+    """
+    Returns (display_records, preferred_columns, all_columns) — flattened,
+    curated for readability, with the full column set available for a
+    "Show all fields" toggle.
+    """
+    if data_type == 'reservations':
+        records = [_prep_reservation_for_display(r) for r in records]
+
+    flattened = [_flatten_record(r) for r in records]
+    all_columns = sorted({k for row in flattened for k in row.keys()})
+
+    preferred = [c for c in PREFERRED_COLUMNS.get(data_type, []) if any(c in row for row in flattened)]
+    if not preferred:
+        preferred = all_columns[:10]
+
+    return flattened, preferred, all_columns
+
+
+def fetch_oracle_raw(data_type, hostname, access_token, app_key, enterprise_id, hotel_id,
+                      start_date_str=None, end_date_str=None, max_records=5000, progress_id=None,
+                      ext_system_code='DUETTO1', rate_plan_code=None):
+    """
+    Generic OHIP fetch for the 'Browse Data' mode — returns RAW records as
+    Oracle sent them (list of dicts), unlike fetch_oracle_reservations which
+    transforms data for the DVA-comparison engine. Used to review data
+    directly in the app instead of via Postman. Paths/params/headers are
+    sourced from the real OHIP Postman collection.
+    """
+    import time as _time
+
+    if data_type not in OHIP_ENDPOINTS:
+        raise ValueError(f"Unknown data_type '{data_type}'. Choose one of: {', '.join(OHIP_ENDPOINTS)}")
+    cfg = OHIP_ENDPOINTS[data_type]
+
+    def _report(status, page=0, total=0):
+        if progress_id:
+            _oracle_progress[progress_id] = {'status': status, 'page': page, 'total_fetched': total}
+
+    if not hostname.startswith('https://'):
+        hostname = f'https://{hostname}'
+    hostname = hostname.rstrip('/')
+    hotel_id_norm = hotel_id.strip().upper()  # OHIP hotel IDs are case-sensitive — always upper
+    url = f"{hostname}{cfg['path'].format(hotel_id=hotel_id_norm, rate_plan_code=(rate_plan_code or '').strip())}"
+
+    all_records = []
+    offset = 0
+    limit = 200
+    page_count = 0
+    single_page = cfg.get('single_page', False)
+    _report('fetching', 0, 0)
+
+    while True:
+        page_count += 1
+        query = {} if single_page else {'limit': limit, 'offset': offset}
+        query.update(cfg['query'](hotel_id_norm, start_date_str, end_date_str, ext_system_code, None))
+        params = urllib.parse.urlencode(query, doseq=True)
+
+        req = urllib.request.Request(f'{url}?{params}' if params else url, method='GET')
+        req.add_header('Authorization', f'Bearer {access_token}')
+        req.add_header('x-app-key', app_key.strip())
+        req.add_header('x-hotelid', hotel_id_norm)
+        if cfg['requires_ext_system']:
+            req.add_header('x-externalsystem', ext_system_code)
+        req.add_header('Accept', 'application/json')
+
+        retry_count, wait_time, max_retries = 0, 2, 5
+        while True:
+            try:
+                _report('fetching', page_count, len(all_records))
+                with urllib.request.urlopen(req, timeout=60) as resp:
+                    data = json.loads(resp.read().decode())
+                break
+            except urllib.error.HTTPError as e:
+                if e.code == 429 and retry_count < max_retries:
+                    retry_count += 1
+                    _report('rate_limited', page_count, len(all_records))
+                    _time.sleep(wait_time)
+                    wait_time *= 2
+                    continue
+                _report('error', page_count, len(all_records))
+                raise Exception(f'{data_type} fetch failed (HTTP {e.code}): {e.read().decode(errors="replace")}')
+
+        records = _extract_records(data, cfg['response_paths'])
+
+        if not records:
+            break
+        all_records.extend(records)
+        _report('fetching', page_count, len(all_records))
+        if single_page or len(records) < limit or len(all_records) > max_records:
+            break
+        offset += limit
+        _time.sleep(0.5)
+
+    _report('done', page_count, len(all_records))
+    return all_records
+
+
+# Post Master / pseudo room categories — not real inventory, must be excluded
+# from cross-reference matching or they show up as false "missing" discrepancies.
+PSEUDO_ROOM_TYPES = {'PM', 'PS', 'POS', 'PSE', 'PI'}
+
+
+def _is_pseudo_room(room_category) -> bool:
+    return str(room_category or '').strip().upper() in PSEUDO_ROOM_TYPES
+
+
 def cross_reference_arrivals(fail_dates, res_df, arrivals_df):
     """
     Compare Opera Arrival Details against Duetto bookings.
     Runs across all dates in arrivals_df (not just fail_dates) and identifies:
-      - missing_in_duetto : Opera reservation not found in Duetto
+      - missing_in_duetto : Opera reservation not found in Duetto at all
+      - not_deducting     : Opera reservation found in Duetto, but with 0 rooms
+                            deducted (present but not counting toward inventory)
       - extra_in_duetto   : Duetto booking not found in Opera arrivals
       - mismatches        : Rate difference > $1 for matched reservations
+    Pseudo/PM room categories (PM, PS, POS, PSE, PI) are excluded from Opera
+    arrivals before matching — they are not real inventory.
     Returns dict keyed by stay_date (date objects).
     """
     if arrivals_df is None or arrivals_df.empty:
         return {}
+
+    # Filter out pseudo/PM rooms from Opera arrivals before any comparison
+    if 'ROOM_CATEGORY' in arrivals_df.columns:
+        arrivals_df = arrivals_df[~arrivals_df['ROOM_CATEGORY'].apply(_is_pseudo_room)].copy()
+    if arrivals_df.empty:
+        return {}
+
     if res_df is None or res_df.empty:
         return {
             '__summary__': {
@@ -494,7 +1430,11 @@ def cross_reference_arrivals(fail_dates, res_df, arrivals_df):
         (c for c in res_df.columns if c.upper() in ('RESERVATION_STATUS', 'STATUS', 'SHORT_RESV_STATUS')),
         None
     )
-    print(f"[xref cols] conf={conf_col} date={date_col} status={status_col} rate={rate_col}")
+    rooms_col = next(
+        (c for c in res_df.columns if c.upper() in ('NUM_ROOMS', 'ROOMS')),
+        None
+    )
+    print(f"[xref cols] conf={conf_col} date={date_col} status={status_col} rate={rate_col} rooms={rooms_col}")
 
     if not conf_col or not date_col:
         return {}
@@ -505,41 +1445,62 @@ def cross_reference_arrivals(fail_dates, res_df, arrivals_df):
     duetto['_CONF']   = duetto[conf_col].astype(str).str.strip()
     duetto['_DATE']   = pd.to_datetime(duetto[date_col], errors='coerce').dt.date
     duetto['_STATUS'] = duetto[status_col].astype(str).str.upper() if status_col else ''
+    duetto['_ROOMS']  = pd.to_numeric(duetto[rooms_col], errors='coerce').fillna(0) if rooms_col else 1
     if rate_col:
         duetto['_RATE'] = pd.to_numeric(duetto[rate_col], errors='coerce').fillna(0)
     else:
         duetto['_RATE'] = 0.0
 
-    # Filter to active bookings only (exclude CANCELLED, DAY_CANCELLED etc.)
-    duetto_active = duetto[
+    # Filter to active, non-cancelled bookings (used for the primary match)
+    duetto_active_all = duetto[
         duetto['_STATUS'].apply(lambda s: any(a in s for a in ACTIVE_STATUSES))
     ] if status_col else duetto
+
+    # Of those, only ones actually deducting rooms count as a true match
+    duetto_active = duetto_active_all[duetto_active_all['_ROOMS'] > 0] if rooms_col else duetto_active_all
+    # Active but zero rooms deducted — "present but not counting toward inventory"
+    duetto_not_deducting = duetto_active_all[duetto_active_all['_ROOMS'] == 0] if rooms_col else duetto_active_all.iloc[0:0]
 
     # Run across all dates present in arrivals_df
     all_dates = sorted(arrivals_df['STAY_DATE'].unique())
 
     results = {}
-    all_opera_confs   = set(arrivals_df['CONFIRMATION_NO'].astype(str).str.strip())
-    all_duetto_confs  = set(duetto_active['_CONF'].tolist())
-    all_matched       = all_opera_confs & all_duetto_confs
-    all_missing       = all_opera_confs - all_duetto_confs
-    all_extra         = all_duetto_confs - all_opera_confs
+    all_opera_confs        = set(arrivals_df['CONFIRMATION_NO'].astype(str).str.strip())
+    all_duetto_confs       = set(duetto_active['_CONF'].tolist())
+    all_not_deducting_confs = set(duetto_not_deducting['_CONF'].tolist())
+    all_matched            = all_opera_confs & all_duetto_confs
+    all_missing            = all_opera_confs - all_duetto_confs - all_not_deducting_confs
+    all_not_deducting      = all_opera_confs & all_not_deducting_confs
+    all_extra              = all_duetto_confs - all_opera_confs
 
     for stay_date in all_dates:
         opera_day  = arrivals_df[arrivals_df['STAY_DATE'] == stay_date]
         duetto_day = duetto_active[duetto_active['_DATE'] == stay_date]
+        not_deducting_day = duetto_not_deducting[duetto_not_deducting['_DATE'] == stay_date]
 
-        opera_confs  = set(opera_day['CONFIRMATION_NO'].astype(str).str.strip())
-        duetto_confs = set(duetto_day['_CONF'].tolist())
+        opera_confs         = set(opera_day['CONFIRMATION_NO'].astype(str).str.strip())
+        duetto_confs        = set(duetto_day['_CONF'].tolist())
+        not_deducting_confs = set(not_deducting_day['_CONF'].tolist())
 
         missing_in_duetto = []
+        not_deducting     = []
         extra_in_duetto   = []
         mismatches        = []
 
-        # Opera reservations not found in Duetto
+        # Opera reservations not found in Duetto (or found but 0 rooms deducted)
         for _, row in opera_day.iterrows():
             conf = str(row['CONFIRMATION_NO'])
-            if conf not in duetto_confs:
+            if conf in not_deducting_confs:
+                nd_row = not_deducting_day[not_deducting_day['_CONF'] == conf].iloc[0]
+                not_deducting.append({
+                    'confirmation_no': conf,
+                    'status':          nd_row.get('_STATUS', ''),
+                    'rate':            row.get('RATE_AMOUNT', 0),
+                    'room_category':   row.get('ROOM_CATEGORY', ''),
+                    'block_code':      row.get('BLOCK_CODE', ''),
+                    'details':         'Present in Duetto but 0 rooms deducted — not counting toward inventory.',
+                })
+            elif conf not in duetto_confs:
                 missing_in_duetto.append({
                     'confirmation_no': conf,
                     'status':          row.get('STATUS', ''),
@@ -579,6 +1540,7 @@ def cross_reference_arrivals(fail_dates, res_df, arrivals_df):
             'duetto_count':      len(duetto_confs),
             'matched':           len(opera_confs & duetto_confs),
             'missing_in_duetto': missing_in_duetto,
+            'not_deducting':     not_deducting,
             'extra_in_duetto':   extra_in_duetto,
             'mismatches':        mismatches,
         }
@@ -593,6 +1555,7 @@ def cross_reference_arrivals(fail_dates, res_df, arrivals_df):
         'duetto_total':     len(all_duetto_confs),
         'matched':          len(all_matched),
         'missing_in_duetto': len(all_missing),
+        'not_deducting':    len(all_not_deducting),
         'extra_in_duetto':  len(all_extra),
         'rate_mismatches':  len(all_mismatch_confs),
         'dates_checked':    len(all_dates),
@@ -863,12 +1826,18 @@ def classify_revenue(row, res_df, folio_analysis=None):
 
 # ── main analysis ─────────────────────────────────────────────────────────────
 
-def run_analysis(dva_raw, res_raw, blk_raw, folio_raw=None, arrivals_raw=None, arrivals_filename=''):
+def run_analysis(dva_raw, res_raw, blk_raw, folio_raw=None, arrivals_raw=None, arrivals_filename='',
+                  arrivals_df=None):
+    """
+    arrivals_df: pass a pre-built DataFrame (e.g. from a live Oracle OHIP fetch)
+    to bypass file parsing entirely. Takes priority over arrivals_raw.
+    """
     comp_df, hotel_name = parse_dva_excel(dva_raw)
     res_df       = parse_bookings(res_raw)         if res_raw       else None
     blk_df       = parse_blocks(blk_raw)           if blk_raw       else None
     folio_df     = parse_folio(folio_raw)          if folio_raw     else None
-    arrivals_df  = parse_arrival_details(arrivals_raw, arrivals_filename) if arrivals_raw else None
+    if arrivals_df is None:
+        arrivals_df = parse_arrival_details(arrivals_raw, arrivals_filename) if arrivals_raw else None
     if arrivals_df is not None:
         print(f"[arrivals] parsed {len(arrivals_df)} rows, cols={list(arrivals_df.columns)[:6]}")
 
@@ -1040,6 +2009,7 @@ RECO_MAP = {
     'FR-U-51': "Check integration logs for zero-rate messages on future bookings; escalate to the Integration Partner Manager.",
     'FR-O-56': "Review integration logs for gross-rate messages on future bookings; escalate to the Integration Partner Manager.",
     'FR-O-53': "PMS folio adjustments are not forwarded to Duetto. Evaluate folio-level integration if full revenue fidelity is required.",
+    'SYNC-GAP': "Opera Arrivals and Duetto agree with each other; escalate the gap to the OHIP integration/sync team rather than treating it as a Duetto data issue.",
 }
 
 def _folio_summary(fa):
@@ -1370,6 +2340,144 @@ def monday_users():
         return jsonify([]), 200
 
 
+@app.route('/fetch_oracle_arrivals', methods=['POST'])
+def fetch_oracle_arrivals():
+    """
+    Test/preview endpoint for the live Oracle OHIP fetch. Returns a small
+    summary (row count, date range, pseudo-filtered) without running a full
+    analysis, so the UI can confirm credentials work before submitting.
+    """
+    body = dict(request.get_json(force=True) or {})
+
+    # If the client secret (or other fields) was left blank, fall back to
+    # previously saved credentials for this hotel_id + environment.
+    if body.get('hotel_id') and not body.get('client_secret'):
+        saved = get_oracle_credentials(body['hotel_id'], body.get('environment') or 'prod')
+        if saved:
+            for k in ('hostname', 'client_id', 'client_secret', 'app_key', 'enterprise_id'):
+                if not body.get(k):
+                    body[k] = saved.get(k, '')
+
+    required = ['hostname', 'client_id', 'client_secret', 'app_key', 'enterprise_id', 'hotel_id',
+                'start_date', 'end_date']
+    missing = [f for f in required if not body.get(f)]
+    if missing:
+        return jsonify({'error': f'Missing required field(s): {", ".join(missing)}. '
+                                  f'If this hotel has no saved credentials yet, fill in the client secret manually.'}), 400
+
+    progress_id = body.get('progress_id') or str(uuid.uuid4())
+
+    token, err = get_oracle_oauth_token(
+        body['hostname'], body['client_id'], body['client_secret'], body['app_key'], body['enterprise_id']
+    )
+    if not token:
+        return jsonify({'error': f'OAuth error: {err}'}), 400
+
+    try:
+        df = fetch_oracle_reservations(
+            body['hostname'], token, body['app_key'], body['enterprise_id'], body['hotel_id'],
+            body['start_date'], body['end_date'], progress_id=progress_id
+        )
+    except Exception as e:
+        return jsonify({'error': f'Fetch error: {e}'}), 502
+
+    if df.empty:
+        return jsonify({'rows': 0, 'confirmations': 0, 'message': 'No reservations returned for this window.'})
+
+    return jsonify({
+        'rows': len(df),
+        'confirmations': int(df['CONFIRMATION_NO'].nunique()),
+        'date_range': [str(df['STAY_DATE'].min()), str(df['STAY_DATE'].max())],
+    })
+
+
+@app.route('/oracle_progress/<progress_id>', methods=['GET'])
+def oracle_progress(progress_id):
+    return jsonify(_oracle_progress.get(progress_id, {'status': 'unknown'}))
+
+
+@app.route('/browse_oracle', methods=['POST'])
+def browse_oracle():
+    """
+    Postman-replacement 'Browse Data' mode — authenticate and fetch raw OHIP
+    data directly, with NO DVA file or comparison analysis required. Supports
+    both SSD and OCIM auth types, and any data_type in OHIP_ENDPOINTS.
+    """
+    body = dict(request.get_json(force=True) or {})
+
+    data_type = body.get('data_type', 'reservations')
+    if data_type not in OHIP_ENDPOINTS:
+        return jsonify({'error': f"Unknown data_type '{data_type}'. Choose one of: {', '.join(OHIP_ENDPOINTS)}"}), 400
+
+    auth_type = body.get('auth_type', 'ocim')
+    hotel_id = (body.get('hotel_id') or '').strip()
+    environment = body.get('environment') or 'prod'
+
+    # Fall back to saved credentials for this hotel + environment if the client secret was left blank
+    if hotel_id and not body.get('client_secret'):
+        saved = get_oracle_credentials(hotel_id, environment)
+        if saved:
+            for k in ('hostname', 'client_id', 'client_secret', 'app_key', 'enterprise_id'):
+                if not body.get(k):
+                    body[k] = saved.get(k, '')
+
+    required = ['hostname', 'client_id', 'client_secret', 'app_key', 'hotel_id']
+    if auth_type == 'ssd':
+        required += ['username', 'password']
+    if data_type == 'rate_plan_schedules':
+        required += ['rate_plan_code']
+    missing = [f for f in required if not body.get(f)]
+    if missing:
+        return jsonify({'error': f'Missing required field(s): {", ".join(missing)}'}), 400
+
+    progress_id = body.get('progress_id') or str(uuid.uuid4())
+
+    token, err = get_oracle_oauth_token(
+        body['hostname'], body['client_id'], body['client_secret'], body['app_key'],
+        enterprise_id=body.get('enterprise_id'), auth_type=auth_type,
+        username=body.get('username'), password=body.get('password'),
+    )
+    if not token:
+        return jsonify({'error': f'OAuth error: {err}'}), 400
+
+    try:
+        records = fetch_oracle_raw(
+            data_type, body['hostname'], token, body['app_key'], body.get('enterprise_id'), hotel_id,
+            body.get('start_date'), body.get('end_date'), progress_id=progress_id,
+            ext_system_code=body.get('ext_system_code') or 'DUETTO1',
+            rate_plan_code=body.get('rate_plan_code'),
+        )
+    except Exception as e:
+        return jsonify({'error': f'Fetch error: {e}'}), 502
+
+    if data_type == 'folio' and records:
+        records = enrich_folio_transaction_names(
+            records, body['hostname'], token, body['app_key'], body.get('enterprise_id'), hotel_id
+        )
+
+    # Save credentials for reuse next time (mirrors the Compare & Analyze flow)
+    if hotel_id:
+        try:
+            save_oracle_credentials(
+                hotel_id, body['hostname'], body['client_id'], body['client_secret'],
+                body['app_key'], body.get('enterprise_id', ''), environment=environment
+            )
+        except Exception as cred_err:
+            print(f"[oracle creds] failed to save: {cred_err}")
+
+    display_records, preferred_columns, all_columns = format_records_for_display(data_type, records)
+    column_labels = {c: _humanize_column(c) for c in all_columns}
+
+    return jsonify({
+        'data_type': data_type,
+        'count': len(records),
+        'records': display_records,
+        'preferred_columns': preferred_columns,
+        'all_columns': all_columns,
+        'column_labels': column_labels,
+    })
+
+
 @app.route('/analyze', methods=['POST'])
 def analyze():
     dva_file   = request.files.get('comparison')
@@ -1377,6 +2485,34 @@ def analyze():
     blk_file   = request.files.get('blocks')
     folio_file    = request.files.get('folio')
     arrivals_file = request.files.get('arrivals')
+
+    # Live Oracle OHIP fetch — alternative to uploading an Arrivals Detail file.
+    # Sent as form fields alongside the other multipart file uploads.
+    oracle_hostname      = request.form.get('oracle_hostname')
+    oracle_client_id     = request.form.get('oracle_client_id')
+    oracle_client_secret = request.form.get('oracle_client_secret')
+    oracle_app_key       = request.form.get('oracle_app_key')
+    oracle_enterprise_id = request.form.get('oracle_enterprise_id')
+    oracle_hotel_id      = request.form.get('oracle_hotel_id')
+    oracle_start_date    = request.form.get('oracle_start_date')
+    oracle_end_date      = request.form.get('oracle_end_date')
+    oracle_progress_id = request.form.get('oracle_progress_id')
+    oracle_environment = request.form.get('oracle_environment') or 'prod'
+
+    # Fall back to saved credentials for this hotel + environment if the client secret was left blank
+    if oracle_hotel_id and not oracle_client_secret:
+        saved = get_oracle_credentials(oracle_hotel_id, oracle_environment)
+        if saved:
+            oracle_hostname      = oracle_hostname      or saved.get('hostname', '')
+            oracle_client_id     = oracle_client_id     or saved.get('client_id', '')
+            oracle_client_secret = oracle_client_secret or saved.get('client_secret', '')
+            oracle_app_key       = oracle_app_key       or saved.get('app_key', '')
+            oracle_enterprise_id = oracle_enterprise_id or saved.get('enterprise_id', '')
+
+    use_live_oracle = not arrivals_file and all([
+        oracle_hostname, oracle_client_id, oracle_client_secret, oracle_app_key,
+        oracle_enterprise_id, oracle_hotel_id, oracle_start_date, oracle_end_date,
+    ])
 
     if not dva_file:
         return jsonify({'error': 'DVA file is required.'}), 400
@@ -1389,7 +2525,20 @@ def analyze():
         arrivals_raw      = arrivals_file.read() if arrivals_file else None
         arrivals_filename = arrivals_file.filename if arrivals_file else ''
 
-        result     = run_analysis(dva_raw, res_raw, blk_raw, folio_raw, arrivals_raw, arrivals_filename)
+        live_arrivals_df = None
+        if use_live_oracle:
+            token, err = get_oracle_oauth_token(
+                oracle_hostname, oracle_client_id, oracle_client_secret, oracle_app_key, oracle_enterprise_id
+            )
+            if not token:
+                return jsonify({'error': f'Oracle OAuth error: {err}'}), 400
+            live_arrivals_df = fetch_oracle_reservations(
+                oracle_hostname, token, oracle_app_key, oracle_enterprise_id, oracle_hotel_id,
+                oracle_start_date, oracle_end_date, progress_id=oracle_progress_id
+            )
+
+        result     = run_analysis(dva_raw, res_raw, blk_raw, folio_raw, arrivals_raw, arrivals_filename,
+                                   arrivals_df=live_arrivals_df)
         xlsx_bytes = build_excel(result)
         result['xlsx_b64'] = base64.b64encode(xlsx_bytes).decode()
 
@@ -1404,16 +2553,218 @@ def analyze():
             'bookings': (res_file.filename   or 'bookings.tsv',    res_raw)   if res_raw   else None,
             'blocks':   (blk_file.filename   or 'blocks.tsv',      blk_raw)   if blk_raw   else None,
             'folio':    (folio_file.filename or 'folio.tsv',        folio_raw)    if folio_raw    else None,
-            'arrivals': (arrivals_file.filename or 'arrivals.xml', arrivals_raw) if arrivals_raw else None,
+            'arrivals': (arrivals_file.filename or 'arrivals.xml', arrivals_raw) if arrivals_raw else (
+                (f"oracle_live_fetch_{oracle_hotel_id}_{oracle_start_date}_to_{oracle_end_date}.csv",
+                 live_arrivals_df.to_csv(index=False).encode()) if use_live_oracle and live_arrivals_df is not None and not live_arrivals_df.empty else None
+            ),
             'xlsx':     (f"DQE_{result.get('hotel_name','report')}_{result.get('analysis_date','')}.xlsx".replace(' ','_'), xlsx_bytes),
         }
         result['session_id'] = session_id
+
+        # Persist to run history (best-effort — don't fail the analysis if this errors)
+        try:
+            result['run_id'] = save_run(result)
+        except Exception as hist_err:
+            print(f"[history] failed to save run: {hist_err}")
+
+        # Save Oracle credentials for this hotel if a live fetch was used, so
+        # the next run for the same hotel doesn't require re-entering them.
+        if use_live_oracle and result.get('hotel_id'):
+            try:
+                save_oracle_credentials(
+                    result['hotel_id'], oracle_hostname, oracle_client_id, oracle_client_secret,
+                    oracle_app_key, oracle_enterprise_id, environment=oracle_environment
+                )
+            except Exception as cred_err:
+                print(f"[oracle creds] failed to save: {cred_err}")
+
+        # Fire an optional webhook/Slack notification on completion
+        webhook_url = request.form.get('webhook_url')
+        if webhook_url:
+            try:
+                notify_webhook(webhook_url, result)
+            except Exception as wh_err:
+                print(f"[webhook] failed to notify: {wh_err}")
 
         return jsonify(result)
 
     except Exception as e:
         import traceback
         return jsonify({'error': str(e), 'trace': traceback.format_exc()}), 500
+
+
+@app.route('/runs', methods=['GET'])
+def runs_list():
+    hotel_id = request.args.get('hotel_id')
+    limit = int(request.args.get('limit', 50))
+    return jsonify(list_runs(limit=limit, hotel_id=hotel_id))
+
+
+@app.route('/runs/<run_id>', methods=['GET'])
+def runs_get(run_id):
+    result = get_run(run_id)
+    if result is None:
+        return jsonify({'error': 'Run not found'}), 404
+    return jsonify(result)
+
+
+@app.route('/runs/<hotel_id>/trend', methods=['GET'])
+def runs_trend(hotel_id):
+    return jsonify(get_hotel_trend(hotel_id))
+
+
+@app.route('/oracle_credentials/<hotel_id>', methods=['GET'])
+def oracle_credentials_get(hotel_id):
+    environment = request.args.get('environment', 'prod')
+    creds = get_oracle_credentials(hotel_id, environment)
+    if not creds:
+        return jsonify({'error': f'No saved {environment} credentials for this hotel'}), 404
+    # Never return the client secret to the browser — only confirm it exists
+    creds['client_secret'] = '••••••••' if creds.get('client_secret') else ''
+    return jsonify(creds)
+
+
+@app.route('/oracle_credentials/<hotel_id>/environments', methods=['GET'])
+def oracle_credentials_environments(hotel_id):
+    return jsonify(list_hotel_environments(hotel_id))
+
+
+@app.route('/validate_oracle_credentials', methods=['POST'])
+def validate_oracle_credentials():
+    """
+    Step 1 of the single-page flow — validate OHIP credentials once, up front,
+    before any of the three actions (DVA compare, pull bookings/blocks/folio,
+    pull deployment info) become available. Just gets a token and remembers
+    the credentials as "last used"; does not fetch any data.
+    """
+    body = dict(request.get_json(force=True) or {})
+    hotel_id = (body.get('hotel_id') or '').strip()
+    environment = body.get('environment') or 'prod'
+
+    if hotel_id and not body.get('client_secret'):
+        saved = get_oracle_credentials(hotel_id, environment)
+        if saved:
+            for k in ('hostname', 'client_id', 'client_secret', 'app_key', 'enterprise_id'):
+                if not body.get(k):
+                    body[k] = saved.get(k, '')
+
+    required = ['hostname', 'client_id', 'client_secret', 'app_key', 'hotel_id']
+    missing = [f for f in required if not body.get(f)]
+    if missing:
+        return jsonify({'ok': False, 'error': f'Missing required field(s): {", ".join(missing)}'}), 400
+
+    token, err = get_oracle_oauth_token(
+        body['hostname'], body['client_id'], body['client_secret'], body['app_key'],
+        enterprise_id=body.get('enterprise_id'), auth_type=body.get('auth_type', 'ocim'),
+        username=body.get('username'), password=body.get('password'),
+    )
+    if not token:
+        return jsonify({'ok': False, 'error': f'OAuth error: {err}'}), 400
+
+    try:
+        save_oracle_credentials(
+            hotel_id, body['hostname'], body['client_id'], body['client_secret'],
+            body['app_key'], body.get('enterprise_id', ''), environment=environment
+        )
+        set_last_used_credentials(hotel_id, environment)
+    except Exception as e:
+        print(f"[oracle creds] failed to save: {e}")
+
+    return jsonify({'ok': True})
+
+
+@app.route('/oracle_credentials/last', methods=['GET'])
+def oracle_credentials_last():
+    """
+    No hotel directory in this app — just remembers whichever credentials were
+    last validated, so the Step 1 form pre-fills instead of starting blank.
+    """
+    last = get_last_used_credentials()
+    if not last:
+        return jsonify({})
+    creds = get_oracle_credentials(last['hotel_id'], last['environment'])
+    if not creds:
+        return jsonify({})
+    creds['client_secret'] = ''  # never send the secret back
+    creds['hotel_id'] = last['hotel_id']
+    return jsonify(creds)
+
+
+@app.route('/readiness_check', methods=['POST'])
+def readiness_check():
+    """
+    Deployment Readiness Check — fires Opera Cloud Version, Block Status
+    Codes, Transaction Codes, Room Types, and Hotel Info for one hotel and
+    returns what each call found. No pass/fail judgment — the deployment
+    engineer reviews the results themselves.
+    """
+    body = dict(request.get_json(force=True) or {})
+    hotel_id = (body.get('hotel_id') or '').strip()
+    environment = body.get('environment') or 'prod'
+
+    if hotel_id and not body.get('client_secret'):
+        saved = get_oracle_credentials(hotel_id, environment)
+        if saved:
+            for k in ('hostname', 'client_id', 'client_secret', 'app_key', 'enterprise_id'):
+                if not body.get(k):
+                    body[k] = saved.get(k, '')
+
+    required = ['hostname', 'client_id', 'client_secret', 'app_key', 'hotel_id']
+    missing = [f for f in required if not body.get(f)]
+    if missing:
+        return jsonify({'error': f'Missing required field(s): {", ".join(missing)}'}), 400
+
+    token, err = get_oracle_oauth_token(
+        body['hostname'], body['client_id'], body['client_secret'], body['app_key'],
+        enterprise_id=body.get('enterprise_id'), auth_type=body.get('auth_type', 'ocim'),
+        username=body.get('username'), password=body.get('password'),
+    )
+    if not token:
+        return jsonify({'error': f'OAuth error: {err}'}), 400
+
+    results = run_readiness_check(
+        body['hostname'], token, body['app_key'], body.get('enterprise_id'), hotel_id,
+        ext_system_code=body.get('ext_system_code') or 'DUETTO1',
+    )
+
+    check_id = None
+    try:
+        check_id = save_readiness_check(hotel_id, results)
+    except Exception as e:
+        print(f"[readiness] failed to save: {e}")
+
+    if hotel_id:
+        try:
+            save_oracle_credentials(
+                hotel_id, body['hostname'], body['client_id'], body['client_secret'],
+                body['app_key'], body.get('enterprise_id', ''), environment=environment
+            )
+        except Exception as e:
+            print(f"[oracle creds] failed to save: {e}")
+
+    return jsonify({'hotel_id': hotel_id, 'check_id': check_id, 'results': results})
+
+
+@app.route('/readiness_checks/<hotel_id>', methods=['GET'])
+def readiness_checks_history(hotel_id):
+    return jsonify(list_readiness_checks(hotel_id))
+
+
+def notify_webhook(url, result):
+    """POST a short summary to a Slack incoming-webhook or generic webhook URL."""
+    summary = result.get('arrivals_xref', {}).get('__summary__') if result.get('arrivals_xref') else None
+    lines = [
+        f"*DQE Analysis Complete* — {result.get('hotel_name', 'Unknown Hotel')}",
+        f"Date range: {result.get('date_range', 'N/A')}",
+        f"Room Accuracy: {result.get('room_accuracy', 0):.1f}%  ·  Revenue Accuracy: {result.get('rev_accuracy', 0):.1f}%",
+        f"Discrepancies found: {len(result.get('discrepancies', []))}",
+    ]
+    if summary:
+        lines.append(f"Arrivals reconciliation: {summary.get('matched', 0)}/{summary.get('opera_total', 0)} matched")
+    payload = json.dumps({'text': '\n'.join(lines)}).encode()
+    req = urllib.request.Request(url, data=payload, method='POST')
+    req.add_header('Content-Type', 'application/json')
+    urllib.request.urlopen(req, timeout=15)
 
 
 MONDAY_TOKEN    = 'eyJhbGciOiJIUzI1NiJ9.eyJ0aWQiOjY3NzAyMzkwOSwiYWFpIjoxMSwidWlkIjo5NjM0NTY4NywiaWFkIjoiMjAyNi0wNi0zMFQxMzo0NDoyNy4wMDBaIiwicGVyIjoibWU6d3JpdGUiLCJhY3RpZCI6MzEwNDYzOTksInJnbiI6InVzZTEifQ.MAAlru7IyQgJzksE7rzRWzL5p9pnQc9uVlTIIGzsYzo'
