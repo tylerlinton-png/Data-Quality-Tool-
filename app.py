@@ -1121,7 +1121,7 @@ PREFERRED_COLUMNS = {
         'block.startDate', 'block.endDate', 'block.actualRooms', 'block.deductInventory', 'block.hotelId',
     ],
     'rates': [
-        'ratePlanCode', 'primaryDetails.description.defaultText', 'classifications.rateCategory',
+        'ratePlanCode', 'primaryDetails.description.defaultText', 'daily', 'classifications.rateCategory',
         'classifications.marketCode', 'primaryDetails.startSellDate', 'primaryDetails.endSellDate',
         'hotelId',
     ],
@@ -1140,7 +1140,7 @@ PREFERRED_COLUMNS = {
     # No example response for these two — preferred columns are best-effort;
     # falls back to the first 10 flattened columns automatically if wrong.
     # Confirmed live (2026-08-04): {"status": {"code": ..., "description": ...}, "color": ..., ...}
-    'block_status_codes': ['status.code', 'status.description', 'color', 'managedBy', 'inUse', 'cateringInUse'],
+    'block_status_codes': ['status.code', 'status.description', 'roomStatusType', 'managedBy', 'inUse', 'cateringInUse'],
     # Confirmed live (2026-08-04)
     'restrictions': [
         'restrictionStatus.code', 'restrictionControl.ratePlanCode', 'restrictionControl.house',
@@ -1190,11 +1190,11 @@ ROLE_CATALOG = {
     },
 }
 
-# The 5 calls a deployment engineer wants to see checked together for a hotel
+# The calls a deployment engineer wants to see checked together for a hotel
 # that's about to go live. No pass/fail judgment is made here — this just
 # collects what each call returns; the human decides if anything looks wrong.
 DEPLOYMENT_READINESS_TYPES = [
-    'opera_cloud_version', 'block_status_codes', 'transaction_codes', 'room_types', 'hotel_info',
+    'opera_cloud_version', 'block_status_codes', 'transaction_codes', 'room_types', 'hotel_info', 'rates',
 ]
 
 
@@ -2694,9 +2694,9 @@ def oracle_credentials_last():
 def readiness_check():
     """
     Deployment Readiness Check — fires Opera Cloud Version, Block Status
-    Codes, Transaction Codes, Room Types, and Hotel Info for one hotel and
-    returns what each call found. No pass/fail judgment — the deployment
-    engineer reviews the results themselves.
+    Codes, Transaction Codes, Room Types, Hotel Info, and Rate Plans for one
+    hotel and returns what each call found. No pass/fail judgment — the
+    deployment engineer reviews the results themselves.
     """
     body = dict(request.get_json(force=True) or {})
     hotel_id = (body.get('hotel_id') or '').strip()

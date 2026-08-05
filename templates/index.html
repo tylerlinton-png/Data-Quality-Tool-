@@ -1101,7 +1101,7 @@
   <div class="action-card locked" id="mode-readiness">
     <div class="action-card-hdr">
       <h2>🔎 Pull Deployment Info</h2>
-      <p>Fetches Opera Cloud Version, Block Status Codes, Transaction Codes, Room Types, and Hotel Info for one property — no pass/fail judgment, just what came back so you can review it yourself, with a full download for each.</p>
+      <p>Fetches Opera Cloud Version, Block Status Codes, Transaction Codes, Room Types, Hotel Info, and Rate Plans for one property — no pass/fail judgment, just what came back so you can review it yourself, with a full download for each.</p>
       <div class="action-card-lock-note" id="readiness-lock-note">Validate your credentials above to unlock this.</div>
     </div>
 
@@ -1664,6 +1664,28 @@
     downloadDelimited(r.records || [], r.all_columns || [], `dqe_config_${r.data_type}_${_readinessHotelId}`, delim, ext, mime);
   }
 
+  // Per-check preview-only filters — the download always includes every
+  // record regardless of these toggles; they only narrow what's shown on
+  // screen. Keyed by data_type so adding another one is just a new entry.
+  const READINESS_FILTERS = {
+    rates: {
+      predicate: rec => rec.daily === true,
+      filteredLabel: 'Daily Only',
+      noneMessage: 'match this filter',
+    },
+    block_status_codes: {
+      predicate: rec => rec.roomStatusType === 'DeductInv',
+      filteredLabel: 'DeductInv Only',
+      noneMessage: 'match this filter',
+    },
+  };
+  const _readinessFilterMode = {}; // data_type -> 'filtered' | 'all', starts on 'filtered'
+
+  function setReadinessFilterMode(dataType, mode) {
+    _readinessFilterMode[dataType] = mode;
+    renderReadinessResults(_readinessResults, _readinessHotelId);
+  }
+
   function renderReadinessResults(results, hotelId) {
     _readinessResults = results;
     _readinessHotelId = hotelId || '';
@@ -1675,17 +1697,44 @@
         : `<span class="readiness-badge error">Error</span>`;
       let body;
       let downloadBtns = '';
+      let filterToggleHtml = '';
+
       if (r.status !== 'ok') {
         body = `<p style="color:#9B1C2E;font-size:.82rem;margin:0">${escHtml(r.error || 'Unknown error')}</p>`;
-      } else if (!r.preview || !r.preview.length) {
-        body = `<p style="color:var(--muted);font-size:.82rem;margin:0">No records returned.</p>`;
       } else {
-        const cols = r.preview_columns && r.preview_columns.length ? r.preview_columns : Object.keys(r.preview[0]);
-        body = `<table class="readiness-preview-table"><thead><tr>${
-          cols.map(c => `<th>${escHtml(c)}</th>`).join('')
-        }</tr></thead><tbody>${
-          r.preview.map(row => `<tr>${cols.map(c => `<td>${escHtml(row[c] != null ? String(row[c]) : '')}</td>`).join('')}</tr>`).join('')
-        }</tbody></table>` + (r.count > r.preview.length ? `<p style="color:var(--muted);font-size:.74rem;margin:6px 0 0">Showing ${r.preview.length} of ${r.count} above — download for the full list.</p>` : '');
+        // Some checks get their own All / Filtered preview toggle (see
+        // READINESS_FILTERS); everything else keeps the plain server-supplied
+        // 3-row preview.
+        let previewRows = r.preview || [];
+        let previewCols = r.preview_columns && r.preview_columns.length
+          ? r.preview_columns : (previewRows[0] ? Object.keys(previewRows[0]) : []);
+        let scopedTotal = r.count;
+        const filterCfg = READINESS_FILTERS[r.data_type];
+
+        if (filterCfg) {
+          const mode = _readinessFilterMode[r.data_type] || 'filtered';
+          const allRecords = r.records || [];
+          const filteredRecords = allRecords.filter(filterCfg.predicate);
+          const activeRecords = mode === 'filtered' ? filteredRecords : allRecords;
+          previewRows = activeRecords.slice(0, 3);
+          if (!previewCols.length && previewRows[0]) previewCols = Object.keys(previewRows[0]);
+          scopedTotal = activeRecords.length;
+          filterToggleHtml = `
+            <div class="auth-type-toggle" style="margin-bottom:10px">
+              <button type="button" class="auth-type-btn ${mode === 'all' ? 'active' : ''}" onclick="setReadinessFilterMode('${r.data_type}', 'all')">All (${allRecords.length})</button>
+              <button type="button" class="auth-type-btn ${mode === 'filtered' ? 'active' : ''}" onclick="setReadinessFilterMode('${r.data_type}', 'filtered')">${filterCfg.filteredLabel} (${filteredRecords.length})</button>
+            </div>`;
+        }
+
+        if (!previewRows.length) {
+          body = filterToggleHtml + `<p style="color:var(--muted);font-size:.82rem;margin:0">No records ${filterCfg ? filterCfg.noneMessage : 'returned'}.</p>`;
+        } else {
+          body = filterToggleHtml + `<div class="table-outer"><div class="table-scroll"><table class="readiness-preview-table"><thead><tr>${
+            previewCols.map(c => `<th>${escHtml(c)}</th>`).join('')
+          }</tr></thead><tbody>${
+            previewRows.map(row => `<tr>${previewCols.map(c => `<td>${escHtml(row[c] != null ? String(row[c]) : '')}</td>`).join('')}</tr>`).join('')
+          }</tbody></table></div></div>` + (scopedTotal > previewRows.length ? `<p style="color:var(--muted);font-size:.74rem;margin:6px 0 0">Showing ${previewRows.length} of ${scopedTotal} above — download for the full list.</p>` : '');
+        }
         downloadBtns = `
           <button type="button" class="oracle-test-btn" style="background:transparent;color:var(--duetto-dark);border:1px solid var(--border-mid);padding:5px 10px;font-size:.72rem" onclick="downloadReadinessExport(${idx}, ',', 'csv', 'text/csv')">⬇ CSV</button>
           <button type="button" class="oracle-test-btn" style="background:transparent;color:var(--duetto-dark);border:1px solid var(--border-mid);padding:5px 10px;font-size:.72rem" onclick="downloadReadinessExport(${idx}, '\\t', 'tsv', 'text/tab-separated-values')">⬇ TSV</button>`;
