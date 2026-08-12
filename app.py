@@ -79,6 +79,27 @@ def init_db():
             value TEXT
         )
     ''')
+    # Named, saved credential bundles (Postman-style "Environments") — this
+    # app runs entirely locally per user, so storing the client secret in
+    # plaintext alongside the rest carries no cross-user exposure risk.
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS saved_connections (
+            id             TEXT PRIMARY KEY,
+            name           TEXT UNIQUE NOT NULL,
+            hostname       TEXT,
+            hotel_id       TEXT,
+            environment    TEXT NOT NULL DEFAULT 'prod',
+            auth_type      TEXT NOT NULL DEFAULT 'ocim',
+            app_key        TEXT,
+            client_id      TEXT,
+            client_secret  TEXT,
+            enterprise_id  TEXT,
+            username       TEXT,
+            password       TEXT,
+            created_at     TEXT,
+            updated_at     TEXT
+        )
+    ''')
 
     # Migration: older installs had oracle_credentials keyed only on hotel_id
     # (no environment column, no composite key). Detect and upgrade in place,
@@ -251,6 +272,81 @@ def get_last_used_credentials():
     return json.loads(row['value']) if row else None
 
 
+CONNECTION_FIELDS = [
+    'hostname', 'hotel_id', 'environment', 'auth_type', 'app_key',
+    'client_id', 'client_secret', 'enterprise_id', 'username', 'password',
+]
+
+
+def save_connection(name, fields):
+    """Upsert by name — saving again under the same name overwrites it."""
+    conn = get_db()
+    existing = conn.execute('SELECT id FROM saved_connections WHERE name = ?', (name,)).fetchone()
+    now = datetime.datetime.now().isoformat()
+    conn_id = existing['id'] if existing else str(uuid.uuid4())
+    values = [fields.get(f, '') for f in CONNECTION_FIELDS]
+    if existing:
+        conn.execute(
+            f"UPDATE saved_connections SET {', '.join(f'{f}=?' for f in CONNECTION_FIELDS)}, updated_at=? "
+            f"WHERE id=?",
+            values + [now, conn_id]
+        )
+    else:
+        conn.execute(
+            f"INSERT INTO saved_connections (id, name, {', '.join(CONNECTION_FIELDS)}, created_at, updated_at) "
+            f"VALUES (?, ?, {', '.join(['?'] * len(CONNECTION_FIELDS))}, ?, ?)",
+            [conn_id, name] + values + [now, now]
+        )
+    conn.commit()
+    conn.close()
+    return conn_id
+
+
+def list_connections():
+    conn = get_db()
+    rows = conn.execute(
+        'SELECT id, name, hostname, hotel_id, environment, auth_type, updated_at '
+        'FROM saved_connections ORDER BY name COLLATE NOCASE'
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def get_connection(conn_id):
+    conn = get_db()
+    row = conn.execute('SELECT * FROM saved_connections WHERE id = ?', (conn_id,)).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def delete_connection(conn_id):
+    conn = get_db()
+    conn.execute('DELETE FROM saved_connections WHERE id = ?', (conn_id,))
+    conn.commit()
+    conn.close()
+
+
+def get_folio_adjustment_percent():
+    conn = get_db()
+    row = conn.execute("SELECT value FROM app_settings WHERE key = 'folio_gross_to_net_percent'").fetchone()
+    conn.close()
+    try:
+        return float(row['value']) if row else 0.0
+    except (ValueError, TypeError):
+        return 0.0
+
+
+def set_folio_adjustment_percent(percent):
+    conn = get_db()
+    conn.execute(
+        "INSERT INTO app_settings (key, value) VALUES ('folio_gross_to_net_percent', ?) "
+        "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+        (str(percent),)
+    )
+    conn.commit()
+    conn.close()
+
+
 init_db()
 
 
@@ -402,10 +498,6 @@ def parse_bookings(raw: bytes) -> pd.DataFrame:
     return df
 
 
-def parse_blocks(raw: bytes) -> pd.DataFrame:
-    return parse_bookings(raw)   # identical structure
-
-
 def parse_folio(raw: bytes) -> pd.DataFrame:
     sep = sniff_delimiter(raw)
     df  = pd.read_csv(io.BytesIO(raw), sep=sep, dtype=str, low_memory=False)
@@ -414,6 +506,229 @@ def parse_folio(raw: bytes) -> pd.DataFrame:
     df['REVENUE_USD']  = pd.to_numeric(df.get('REVENUE_USD',  pd.Series(dtype=float)), errors='coerce').fillna(0)
     df['RATE_AMOUNT']  = pd.to_numeric(df.get('RATE_AMOUNT',  pd.Series(dtype=float)), errors='coerce').fillna(0)
     return df
+
+
+# ── PMS Cashier Journal parser ("Journal by Cashier and Transaction Code") ───
+# Opera-native transaction ledger, used to validate Duetto's Folio Report
+# independently. TRX_NO here is confirmed (live samples, 2026-08-05) to be the
+# exact same ID as Duetto folio's TRANSACTION_ID, and TRX_CODE the same code
+# as folio's REVENUE_TYPE — so this joins 1:1 at the transaction level rather
+# than needing a day/code bucket comparison. PDF exports of this report don't
+# carry TRX_NO at all (checked live) so PDF isn't supported here — xlsx/xml/
+# txt all do.
+_CASHIER_JOURNAL_COLUMN_MAP = {
+    'TRX_NO': 'TRX_NO', 'TRX_CODE': 'TRX_CODE', 'TRX_DESC': 'TRX_DESC',
+    'BUSINESS_DATE': 'BUSINESS_DATE', 'CASHIER_DEBIT': 'CASHIER_DEBIT',
+    'CASHIER_CREDIT': 'CASHIER_CREDIT', 'CASHIER_ID': 'CASHIER_ID',
+    'CASHIER_NAME': 'CASHIER_NAME', 'ROOM': 'ROOM', 'CURRENCY1': 'CURRENCY1',
+    'GUEST_FULL_NAME': 'GUEST_FULL_NAME', 'RECEIPT_NO': 'RECEIPT_NO',
+}
+
+
+def _finalize_cashier_journal(df: pd.DataFrame) -> pd.DataFrame:
+    df.columns = [str(c).strip().upper() for c in df.columns]
+    for col in _CASHIER_JOURNAL_COLUMN_MAP:
+        if col not in df.columns:
+            df[col] = None
+    df['TRX_NO']   = df['TRX_NO'].astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
+    df['TRX_CODE'] = df['TRX_CODE'].astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
+    df['BUSINESS_DATE'] = pd.to_datetime(df['BUSINESS_DATE'], errors='coerce').dt.date
+    debit  = pd.to_numeric(df['CASHIER_DEBIT'],  errors='coerce').fillna(0)
+    credit = pd.to_numeric(df['CASHIER_CREDIT'], errors='coerce').fillna(0)
+    df['NET_AMOUNT'] = debit - credit
+    return df[df['TRX_NO'].notna() & (df['TRX_NO'] != '') & (df['TRX_NO'] != 'nan')]
+
+
+def parse_cashier_journal(raw: bytes, filename: str = '') -> pd.DataFrame:
+    ext = (filename or '').rsplit('.', 1)[-1].lower()
+
+    if ext in ('xlsx', 'xls'):
+        wb = load_workbook(io.BytesIO(raw), data_only=True, read_only=True)
+        best_sheet = None
+        for ws in wb.worksheets:
+            header = [str(c.value or '').strip().upper() for c in next(ws.iter_rows(min_row=1, max_row=1))]
+            if 'TRX_NO' in header:
+                best_sheet = ws
+                break
+        if best_sheet is None:
+            raise ValueError('No sheet with a TRX_NO column found in this workbook.')
+        rows = list(best_sheet.iter_rows(values_only=True))
+        header = [str(h or '').strip().upper() for h in rows[0]]
+        df = pd.DataFrame(rows[1:], columns=header)
+        return _finalize_cashier_journal(df)
+
+    if ext == 'xml':
+        root = ET.fromstring(raw)
+        records = []
+        for el in root.iter():
+            if el.find('TRX_NO') is not None:
+                records.append({child.tag: (child.text or '') for child in el})
+        if not records:
+            raise ValueError('No transaction records (TRX_NO) found in this XML file.')
+        return _finalize_cashier_journal(pd.DataFrame(records))
+
+    # Fall back to delimited text (.txt/.tsv/.csv)
+    sep = sniff_delimiter(raw)
+    df = pd.read_csv(io.BytesIO(raw), sep=sep, dtype=str, low_memory=False)
+    return _finalize_cashier_journal(df)
+
+
+def analyze_api_folio_variance(api_records, folio_df, adjustment_percent=0.0, tolerance=1.0):
+    """
+    Bucket-level (stay date + transaction code) reconciliation between the
+    live OHIP folio pull and Duetto's own Folio Report.
+
+    Duetto receives GROSS revenue over the API but the Folio Report itself
+    reports NET, so a straight per-transaction join isn't reliable — this
+    compares day+code totals instead, with the API side adjusted down by
+    adjustment_percent first (adjusted = gross * (1 - percent/100)) to
+    normalize the known gross/net gap before flagging real variances.
+
+    Unlike the Cashier Journal check (which is confirmed exact-match at the
+    transaction level), there's no verified shared transaction ID between
+    these two sources yet — this stays bucket-level until that's checked
+    against real paired samples.
+    """
+    if folio_df is None or not api_records:
+        return None
+
+    factor = 1 - (adjustment_percent / 100.0)
+    api_buckets = {}
+    for r in api_records:
+        date = str(r.get('postingDate') or '')
+        code = str(r.get('transactionCode') or '').strip()
+        amt  = r.get('postedAmount.amount')
+        try:
+            amt = float(amt) if amt is not None else 0.0
+        except (ValueError, TypeError):
+            amt = 0.0
+        key = (date, code)
+        api_buckets[key] = api_buckets.get(key, 0.0) + amt
+
+    folio = folio_df.copy()
+    folio['REVENUE_TYPE'] = folio.get('REVENUE_TYPE', '').astype(str).str.strip()
+    folio['RATE_AMOUNT']  = pd.to_numeric(folio.get('RATE_AMOUNT'), errors='coerce').fillna(0)
+    folio_buckets = {}
+    for _, row in folio.iterrows():
+        key = (str(row.get('STAY_DATE', '')), row.get('REVENUE_TYPE', ''))
+        folio_buckets[key] = folio_buckets.get(key, 0.0) + float(row.get('RATE_AMOUNT', 0) or 0)
+
+    all_keys = set(api_buckets) | set(folio_buckets)
+    rows = []
+    matched_count = mismatch_count = api_only_count = duetto_only_count = 0
+
+    for date, code in sorted(all_keys):
+        key = (date, code)
+        gross = api_buckets.get(key)
+        net_duetto = folio_buckets.get(key)
+        if gross is not None and net_duetto is None:
+            rows.append({
+                'stay_date': date, 'transaction_code': code,
+                'api_gross_amount': round(gross, 2), 'api_adjusted_amount': round(gross * factor, 2),
+                'duetto_amount': None, 'diff': None, 'status': 'api_only',
+            })
+            api_only_count += 1
+            continue
+        if gross is None and net_duetto is not None:
+            rows.append({
+                'stay_date': date, 'transaction_code': code,
+                'api_gross_amount': None, 'api_adjusted_amount': None,
+                'duetto_amount': round(net_duetto, 2), 'diff': None, 'status': 'duetto_only',
+            })
+            duetto_only_count += 1
+            continue
+        adjusted = gross * factor
+        diff = adjusted - net_duetto
+        is_mismatch = abs(diff) > tolerance
+        rows.append({
+            'stay_date': date, 'transaction_code': code,
+            'api_gross_amount': round(gross, 2), 'api_adjusted_amount': round(adjusted, 2),
+            'duetto_amount': round(net_duetto, 2), 'diff': round(diff, 2),
+            'status': 'mismatch' if is_mismatch else 'matched',
+        })
+        if is_mismatch:
+            mismatch_count += 1
+        else:
+            matched_count += 1
+
+    return {
+        'status': 'ok',
+        'adjustment_percent': adjustment_percent,
+        'matched_count': matched_count,
+        'mismatch_count': mismatch_count,
+        'api_only_count': api_only_count,
+        'duetto_only_count': duetto_only_count,
+        'rows': rows,
+    }
+
+
+def analyze_cashier_journal_variance(folio_df, journal_df, tolerance=1.0):
+    """
+    Transaction-level reconciliation between Duetto's Folio Report and the
+    PMS-native Cashier Journal, joined on folio.TRANSACTION_ID == journal.TRX_NO
+    (confirmed live to be the same ID space — see parser docstring).
+    """
+    if folio_df is None or journal_df is None:
+        return None
+    if 'TRANSACTION_ID' not in folio_df.columns:
+        return {'status': 'error', 'message': 'Folio Report has no TRANSACTION_ID column to join on.'}
+
+    folio = folio_df.copy()
+    folio['TRANSACTION_ID'] = folio['TRANSACTION_ID'].astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
+    folio['RATE_AMOUNT']    = pd.to_numeric(folio.get('RATE_AMOUNT'), errors='coerce').fillna(0)
+
+    folio_ids   = set(folio['TRANSACTION_ID'])
+    journal_ids = set(journal_df['TRX_NO'])
+
+    matched_ids = folio_ids & journal_ids
+    only_folio  = folio_ids - journal_ids
+    only_journal = journal_ids - folio_ids
+
+    mismatches = []
+    for tid in matched_ids:
+        f_row = folio[folio['TRANSACTION_ID'] == tid].iloc[0]
+        j_row = journal_df[journal_df['TRX_NO'] == tid].iloc[0]
+        f_amt = float(f_row.get('RATE_AMOUNT', 0) or 0)
+        j_amt = float(j_row.get('NET_AMOUNT', 0) or 0)
+        code_mismatch = str(f_row.get('REVENUE_TYPE', '')).strip() != str(j_row.get('TRX_CODE', '')).strip()
+        amount_mismatch = abs(f_amt - j_amt) > tolerance
+        if code_mismatch or amount_mismatch:
+            mismatches.append({
+                'transaction_id': tid,
+                'stay_date': str(f_row.get('STAY_DATE', '')),
+                'duetto_revenue_type': f_row.get('REVENUE_TYPE', ''),
+                'pms_trx_code': j_row.get('TRX_CODE', ''),
+                'duetto_amount': f_amt,
+                'pms_amount': j_amt,
+                'diff': round(f_amt - j_amt, 2),
+                'code_mismatch': code_mismatch,
+            })
+
+    def _folio_row_summary(tid):
+        r = folio[folio['TRANSACTION_ID'] == tid].iloc[0]
+        return {
+            'transaction_id': tid, 'stay_date': str(r.get('STAY_DATE', '')),
+            'revenue_type': r.get('REVENUE_TYPE', ''), 'amount': float(r.get('RATE_AMOUNT', 0) or 0),
+        }
+
+    def _journal_row_summary(tid):
+        r = journal_df[journal_df['TRX_NO'] == tid].iloc[0]
+        return {
+            'transaction_id': tid, 'business_date': str(r.get('BUSINESS_DATE', '')),
+            'trx_code': r.get('TRX_CODE', ''), 'trx_desc': r.get('TRX_DESC', ''),
+            'amount': float(r.get('NET_AMOUNT', 0) or 0),
+        }
+
+    return {
+        'status': 'ok',
+        'matched_count': len(matched_ids),
+        'mismatch_count': len(mismatches),
+        'missing_from_journal_count': len(only_folio),
+        'missing_from_duetto_count': len(only_journal),
+        'mismatches': mismatches,
+        'missing_from_journal': [_folio_row_summary(tid) for tid in only_folio],
+        'missing_from_duetto': [_journal_row_summary(tid) for tid in only_journal],
+    }
 
 
 # ── Arrival Details Report parsers (XML and PDF) ─────────────────────────────
@@ -748,135 +1063,6 @@ PSEUDO_ROOM_TYPES_ORACLE = {'PM', 'PS', 'POS', 'PSE', 'PI'}
 # In-memory progress tracker for long-running Oracle fetches, keyed by a
 # client-supplied progress_id and polled via GET /oracle_progress/<id>.
 _oracle_progress = {}
-
-
-def fetch_oracle_reservations(hostname, access_token, app_key, enterprise_id, hotel_id,
-                               start_date_str, end_date_str, max_records=5000, progress_id=None):
-    """
-    Fetch reservations from Oracle OHIP for the given stay window, with
-    pagination and exponential backoff on 429 rate-limit responses.
-    Returns a DataFrame in the same schema as the other arrival-details parsers
-    (one row per stay night), with pseudo/PM rooms already filtered out.
-    If progress_id is given, page-by-page progress is written to
-    _oracle_progress[progress_id] for polling by /oracle_progress/<id>.
-    """
-    import time as _time
-
-    def _report(status, page=0, total=0):
-        if progress_id:
-            _oracle_progress[progress_id] = {'status': status, 'page': page, 'total_fetched': total}
-
-    if not hostname.startswith('https://'):
-        hostname = f'https://{hostname}'
-    hostname = hostname.rstrip('/')
-    rsv_url = f'{hostname}/rsv/v1/hotels/{hotel_id.strip()}/reservations'
-
-    all_reservations = []
-    offset = 0
-    limit = 200
-    page_count = 0
-    departure_start = (pd.to_datetime(start_date_str) + datetime.timedelta(days=1)).strftime('%Y-%m-%d')
-
-    _report('fetching', 0, 0)
-
-    while True:
-        page_count += 1
-        params = urllib.parse.urlencode({
-            'arrivalEndDate': end_date_str,
-            'departureStartDate': departure_start,
-            'limit': limit,
-            'offset': offset,
-        })
-        req = urllib.request.Request(f'{rsv_url}?{params}', method='GET')
-        req.add_header('Authorization', f'Bearer {access_token}')
-        req.add_header('x-app-key', app_key.strip())
-        req.add_header('x-hotelid', hotel_id.strip())
-        # NOTE: per the real OHIP Postman collection, enterpriseId is only sent
-        # on the OAuth token request — not on data calls like this one.
-        req.add_header('Accept', 'application/json')
-
-        retry_count, wait_time, max_retries = 0, 2, 5
-        while True:
-            try:
-                _report('fetching', page_count, len(all_reservations))
-                with urllib.request.urlopen(req, timeout=60) as resp:
-                    data = json.loads(resp.read().decode())
-                break
-            except urllib.error.HTTPError as e:
-                if e.code == 429 and retry_count < max_retries:
-                    retry_count += 1
-                    _report('rate_limited', page_count, len(all_reservations))
-                    _time.sleep(wait_time)
-                    wait_time *= 2
-                    continue
-                _report('error', page_count, len(all_reservations))
-                raise Exception(f'Reservation fetch failed (HTTP {e.code}): {e.read().decode(errors="replace")}')
-
-        reservations = data.get('reservations', {}).get('reservationInfo', [])
-        if not reservations:
-            break
-        all_reservations.extend(reservations)
-        _report('fetching', page_count, len(all_reservations))
-        if len(reservations) < limit or len(all_reservations) > max_records:
-            break
-        offset += limit
-        _time.sleep(0.5)
-
-    _report('done', page_count, len(all_reservations))
-
-    records = []
-    for res in all_reservations:
-        status = str(res.get('computedReservationStatus', '')).upper().replace('_', ' ').strip()
-        if any(x in status for x in ['CANCEL', 'NO SHOW', 'NOSHOW', 'DAY CANCEL']):
-            continue
-
-        room_stay = res.get('roomStay', {})
-        num_rooms = int(room_stay.get('numberOfRooms', 1))
-        if num_rooms == 0:
-            continue
-
-        room_type = str(room_stay.get('roomType', '')).upper().strip()
-        room_class = str(room_stay.get('roomClass', '')).upper().strip()
-        is_pseudo = room_stay.get('pseudoRoom', False) or room_type in PSEUDO_ROOM_TYPES_ORACLE or room_class in PSEUDO_ROOM_TYPES_ORACLE
-        if is_pseudo:
-            continue
-
-        conf = None
-        for item in res.get('reservationIdList', []):
-            item_type = str(item.get('type', '')).upper()
-            if item_type in ('RESERVATION', 'ID', 'RESERVATIONID') or (item_type != 'CONFIRMATION' and conf is None):
-                conf = str(item['id']).strip()
-                if item_type == 'RESERVATION':
-                    break
-
-        rate = float(room_stay.get('rateAmount', {}).get('amount', 0))
-        arr_s = room_stay.get('arrivalDate', '')
-        dep_s = room_stay.get('departureDate', '')
-        try:
-            arr = pd.to_datetime(arr_s).date()
-            dep = pd.to_datetime(dep_s).date()
-        except Exception:
-            continue
-
-        stay = arr
-        while stay < dep:
-            records.append({
-                'CONFIRMATION_NO': conf or '',
-                'STATUS':          status,
-                'STAY_DATE':       stay,
-                'ARRIVAL':         arr,
-                'DEPARTURE':       dep,
-                'NO_OF_ROOMS':     num_rooms,
-                'RATE_AMOUNT':     rate,
-                'IS_SHARED':       'N',
-                'BLOCK_CODE':      '',
-                'ROOM_CATEGORY':   room_type,
-            })
-            stay += datetime.timedelta(days=1)
-
-    if not records:
-        return pd.DataFrame()
-    return pd.DataFrame(records)
 
 
 # ── Generic OHIP "Browse Data" fetch (Postman-replacement mode) ─────────────
@@ -1292,10 +1478,9 @@ def fetch_oracle_raw(data_type, hostname, access_token, app_key, enterprise_id, 
                       ext_system_code='DUETTO1', rate_plan_code=None):
     """
     Generic OHIP fetch for the 'Browse Data' mode — returns RAW records as
-    Oracle sent them (list of dicts), unlike fetch_oracle_reservations which
-    transforms data for the DVA-comparison engine. Used to review data
-    directly in the app instead of via Postman. Paths/params/headers are
-    sourced from the real OHIP Postman collection.
+    Oracle sent them (list of dicts). Used to review data directly in the
+    app instead of via Postman. Paths/params/headers are sourced from the
+    real OHIP Postman collection.
     """
     import time as _time
 
@@ -1641,13 +1826,12 @@ def fmt_booking(b: pd.Series) -> str:
     return f"BookingID: {bid} | Rooms: {rooms} | Status: {status} | Rate: {rate} | Room Type: {rtype}"
 
 
-def classify_room(row, res_df, blk_df):
+def classify_room(row, res_df):
     stay   = row['StayDay']
     period = row['Period']
     diff   = row['RoomDiff']
 
     day_res = res_df[res_df['STAY_DATE'] == stay] if res_df is not None else pd.DataFrame()
-    day_blk = blk_df[blk_df['STAY_DATE'] == stay] if blk_df is not None else pd.DataFrame()
 
     if diff > 0:  # Duetto overstates
         if period == 'HISTORIC' and not day_res.empty:
@@ -1663,11 +1847,10 @@ def classify_room(row, res_df, blk_df):
                 return 'HO-O-10', expl, contrib
 
         # Check for cancelled bookings with rooms > 0
-        all_day = pd.concat([day_res, day_blk]) if not day_blk.empty else day_res
-        if not all_day.empty:
-            phantom = all_day[
-                all_day['RESERVATION_STATUS'].str.upper().str.contains('CANCEL', na=False) &
-                (all_day['NUM_ROOMS'] > 0)
+        if not day_res.empty:
+            phantom = day_res[
+                day_res['RESERVATION_STATUS'].str.upper().str.contains('CANCEL', na=False) &
+                (day_res['NUM_ROOMS'] > 0)
             ]
             if not phantom.empty:
                 contrib = '\n'.join(fmt_booking(r) for _, r in phantom.head(10).iterrows())
@@ -1826,25 +2009,98 @@ def classify_revenue(row, res_df, folio_analysis=None):
 
 # ── main analysis ─────────────────────────────────────────────────────────────
 
-def run_analysis(dva_raw, res_raw, blk_raw, folio_raw=None, arrivals_raw=None, arrivals_filename='',
-                  arrivals_df=None):
+def run_analysis(dva_raw, res_raw, folio_raw=None, arrivals_raw=None, arrivals_filename='',
+                  arrivals_df=None, cashier_journal_raw=None, cashier_journal_filename='',
+                  api_folio_records=None, api_folio_adjustment_percent=0.0):
     """
     arrivals_df: pass a pre-built DataFrame (e.g. from a live Oracle OHIP fetch)
     to bypass file parsing entirely. Takes priority over arrivals_raw.
     """
-    comp_df, hotel_name = parse_dva_excel(dva_raw)
     res_df       = parse_bookings(res_raw)         if res_raw       else None
-    blk_df       = parse_blocks(blk_raw)           if blk_raw       else None
     folio_df     = parse_folio(folio_raw)          if folio_raw     else None
+
+    # PMS Cashier Journal — independent validation of the Folio Report against
+    # Opera's own transaction ledger, joined on TRANSACTION_ID == TRX_NO. Works
+    # regardless of whether a DVA was uploaded.
+    cashier_journal_variance = None
+    if cashier_journal_raw and folio_df is not None:
+        try:
+            journal_df = parse_cashier_journal(cashier_journal_raw, cashier_journal_filename)
+            cashier_journal_variance = analyze_cashier_journal_variance(folio_df, journal_df)
+        except Exception as e:
+            cashier_journal_variance = {'status': 'error', 'message': str(e)}
+    elif cashier_journal_raw and folio_df is None:
+        cashier_journal_variance = {
+            'status': 'error',
+            'message': 'Upload a Folio Report as well — the Cashier Journal is validated against it.',
+        }
+
+    # Live OHIP API folio pull vs. the Duetto Folio Report — bucket-level
+    # gross/net reconciliation. Works regardless of whether a DVA was uploaded.
+    api_folio_variance = None
+    if api_folio_records and folio_df is not None:
+        try:
+            api_folio_variance = analyze_api_folio_variance(api_folio_records, folio_df, api_folio_adjustment_percent)
+        except Exception as e:
+            api_folio_variance = {'status': 'error', 'message': str(e)}
+    elif api_folio_records and folio_df is None:
+        api_folio_variance = {
+            'status': 'error',
+            'message': 'Upload a Folio Report as well — the live API pull is validated against it.',
+        }
     if arrivals_df is None:
         arrivals_df = parse_arrival_details(arrivals_raw, arrivals_filename) if arrivals_raw else None
     if arrivals_df is not None:
         print(f"[arrivals] parsed {len(arrivals_df)} rows, cols={list(arrivals_df.columns)[:6]}")
 
-    # Restrict to dates present in the bookings/blocks/folio files when they are provided.
+    if not dva_raw:
+        # No DVA uploaded — there's no Duetto-vs-PMS commit comparison to score,
+        # so skip the whole accuracy/discrepancy engine entirely rather than
+        # fake a result. Show whatever CAN be computed from what was actually
+        # uploaded: the Bookings-vs-Arrivals reconciliation if both are present,
+        # plus the Cashier Journal variance above if that ran.
+        def _first_present(df, col):
+            if df is not None and col in df.columns:
+                vals = df[col].dropna()
+                if not vals.empty:
+                    return str(vals.iloc[0])
+            return None
+
+        hotel_name = (_first_present(res_df, 'HOTEL_NAME') or _first_present(folio_df, 'HOTEL_NAME')
+                      or 'Unknown Hotel')
+
+        arrivals_xref = {}
+        if res_df is not None and arrivals_df is not None:
+            arrivals_xref = cross_reference_arrivals([], res_df, arrivals_df)
+
+        all_dates = set()
+        for df in (res_df, folio_df):
+            if df is not None and 'STAY_DATE' in df.columns:
+                all_dates |= set(df['STAY_DATE'].dropna().unique())
+        sorted_dates = sorted(all_dates)
+        date_range = f"{sorted_dates[0]} – {sorted_dates[-1]}" if sorted_dates else 'N/A'
+
+        return {
+            'hotel_name':      hotel_name,
+            'analysis_date':   TODAY.strftime('%Y-%m-%d'),
+            'date_range':      date_range,
+            'total_days':      len(sorted_dates),
+            'room_accuracy':   None,
+            'rev_accuracy':    None,
+            'discrepancies':   [],
+            'recommendations': [],
+            'arrivals_xref':   {str(k): v for k, v in arrivals_xref.items()},
+            'cashier_journal_variance': cashier_journal_variance,
+            'api_folio_variance': api_folio_variance,
+            'no_dva': True,
+        }
+
+    comp_df, hotel_name = parse_dva_excel(dva_raw)
+
+    # Restrict to dates present in the bookings/folio files when they are provided.
     # This lets analysts upload a short date-range export and only see those days analyzed.
     date_sets = []
-    for df in [res_df, blk_df, folio_df]:
+    for df in [res_df, folio_df]:
         if df is not None and 'STAY_DATE' in df.columns:
             dates = set(df['STAY_DATE'].dropna().unique())
             if dates:
@@ -1876,7 +2132,7 @@ def run_analysis(dva_raw, res_raw, blk_raw, folio_raw=None, arrivals_raw=None, a
     disc_map = {}  # stay_date -> record
 
     for _, row in room_fail.iterrows():
-        code, expl, contrib = classify_room(row, res_df, blk_df)
+        code, expl, contrib = classify_room(row, res_df)
         disc_map[row['StayDay']] = {
             'StayDate':    str(row['StayDay']),
             'Period':      row['Period'],
@@ -1989,6 +2245,8 @@ def run_analysis(dva_raw, res_raw, blk_raw, folio_raw=None, arrivals_raw=None, a
         'discrepancies':   discrepancies,
         'recommendations': recommendations,
         'arrivals_xref':   {str(k): v for k, v in arrivals_xref.items()},
+        'cashier_journal_variance': cashier_journal_variance,
+        'api_folio_variance': api_folio_variance,
     }
 
 
@@ -2340,57 +2598,6 @@ def monday_users():
         return jsonify([]), 200
 
 
-@app.route('/fetch_oracle_arrivals', methods=['POST'])
-def fetch_oracle_arrivals():
-    """
-    Test/preview endpoint for the live Oracle OHIP fetch. Returns a small
-    summary (row count, date range, pseudo-filtered) without running a full
-    analysis, so the UI can confirm credentials work before submitting.
-    """
-    body = dict(request.get_json(force=True) or {})
-
-    # If the client secret (or other fields) was left blank, fall back to
-    # previously saved credentials for this hotel_id + environment.
-    if body.get('hotel_id') and not body.get('client_secret'):
-        saved = get_oracle_credentials(body['hotel_id'], body.get('environment') or 'prod')
-        if saved:
-            for k in ('hostname', 'client_id', 'client_secret', 'app_key', 'enterprise_id'):
-                if not body.get(k):
-                    body[k] = saved.get(k, '')
-
-    required = ['hostname', 'client_id', 'client_secret', 'app_key', 'enterprise_id', 'hotel_id',
-                'start_date', 'end_date']
-    missing = [f for f in required if not body.get(f)]
-    if missing:
-        return jsonify({'error': f'Missing required field(s): {", ".join(missing)}. '
-                                  f'If this hotel has no saved credentials yet, fill in the client secret manually.'}), 400
-
-    progress_id = body.get('progress_id') or str(uuid.uuid4())
-
-    token, err = get_oracle_oauth_token(
-        body['hostname'], body['client_id'], body['client_secret'], body['app_key'], body['enterprise_id']
-    )
-    if not token:
-        return jsonify({'error': f'OAuth error: {err}'}), 400
-
-    try:
-        df = fetch_oracle_reservations(
-            body['hostname'], token, body['app_key'], body['enterprise_id'], body['hotel_id'],
-            body['start_date'], body['end_date'], progress_id=progress_id
-        )
-    except Exception as e:
-        return jsonify({'error': f'Fetch error: {e}'}), 502
-
-    if df.empty:
-        return jsonify({'rows': 0, 'confirmations': 0, 'message': 'No reservations returned for this window.'})
-
-    return jsonify({
-        'rows': len(df),
-        'confirmations': int(df['CONFIRMATION_NO'].nunique()),
-        'date_range': [str(df['STAY_DATE'].min()), str(df['STAY_DATE'].max())],
-    })
-
-
 @app.route('/oracle_progress/<progress_id>', methods=['GET'])
 def oracle_progress(progress_id):
     return jsonify(_oracle_progress.get(progress_id, {'status': 'unknown'}))
@@ -2426,6 +2633,8 @@ def browse_oracle():
         required += ['username', 'password']
     if data_type == 'rate_plan_schedules':
         required += ['rate_plan_code']
+    if data_type in ('reservations', 'blocks', 'folio', 'restrictions'):
+        required += ['start_date', 'end_date']
     missing = [f for f in required if not body.get(f)]
     if missing:
         return jsonify({'error': f'Missing required field(s): {", ".join(missing)}'}), 400
@@ -2482,82 +2691,67 @@ def browse_oracle():
 def analyze():
     dva_file   = request.files.get('comparison')
     res_file   = request.files.get('reservations')
-    blk_file   = request.files.get('blocks')
     folio_file    = request.files.get('folio')
     arrivals_file = request.files.get('arrivals')
+    cashier_journal_file = request.files.get('cashier_journal')
+    api_folio_records_file = request.files.get('api_folio_records')
 
-    # Live Oracle OHIP fetch — alternative to uploading an Arrivals Detail file.
-    # Sent as form fields alongside the other multipart file uploads.
-    oracle_hostname      = request.form.get('oracle_hostname')
-    oracle_client_id     = request.form.get('oracle_client_id')
-    oracle_client_secret = request.form.get('oracle_client_secret')
-    oracle_app_key       = request.form.get('oracle_app_key')
-    oracle_enterprise_id = request.form.get('oracle_enterprise_id')
-    oracle_hotel_id      = request.form.get('oracle_hotel_id')
-    oracle_start_date    = request.form.get('oracle_start_date')
-    oracle_end_date      = request.form.get('oracle_end_date')
-    oracle_progress_id = request.form.get('oracle_progress_id')
-    oracle_environment = request.form.get('oracle_environment') or 'prod'
-
-    # Fall back to saved credentials for this hotel + environment if the client secret was left blank
-    if oracle_hotel_id and not oracle_client_secret:
-        saved = get_oracle_credentials(oracle_hotel_id, oracle_environment)
-        if saved:
-            oracle_hostname      = oracle_hostname      or saved.get('hostname', '')
-            oracle_client_id     = oracle_client_id     or saved.get('client_id', '')
-            oracle_client_secret = oracle_client_secret or saved.get('client_secret', '')
-            oracle_app_key       = oracle_app_key       or saved.get('app_key', '')
-            oracle_enterprise_id = oracle_enterprise_id or saved.get('enterprise_id', '')
-
-    use_live_oracle = not arrivals_file and all([
-        oracle_hostname, oracle_client_id, oracle_client_secret, oracle_app_key,
-        oracle_enterprise_id, oracle_hotel_id, oracle_start_date, oracle_end_date,
-    ])
-
-    if not dva_file:
-        return jsonify({'error': 'DVA file is required.'}), 400
+    # Every file is optional now — but at least one is needed to have anything
+    # to analyze. A DVA unlocks the full accuracy/discrepancy engine; without
+    # one, run_analysis() falls back to whatever cross-file comparison the
+    # uploaded combination actually supports (e.g. Bookings vs. Arrivals).
+    if not any([dva_file, res_file, folio_file, arrivals_file, cashier_journal_file, api_folio_records_file]):
+        return jsonify({'error': 'Upload at least one file to analyze.'}), 400
 
     try:
-        dva_raw      = dva_file.read()
+        dva_raw      = dva_file.read()      if dva_file      else None
         res_raw      = res_file.read()      if res_file      else None
-        blk_raw      = blk_file.read()      if blk_file      else None
         folio_raw    = folio_file.read()    if folio_file    else None
         arrivals_raw      = arrivals_file.read() if arrivals_file else None
         arrivals_filename = arrivals_file.filename if arrivals_file else ''
+        cashier_journal_raw      = cashier_journal_file.read()    if cashier_journal_file else None
+        cashier_journal_filename = cashier_journal_file.filename if cashier_journal_file else ''
 
-        live_arrivals_df = None
-        if use_live_oracle:
-            token, err = get_oracle_oauth_token(
-                oracle_hostname, oracle_client_id, oracle_client_secret, oracle_app_key, oracle_enterprise_id
-            )
-            if not token:
-                return jsonify({'error': f'Oracle OAuth error: {err}'}), 400
-            live_arrivals_df = fetch_oracle_reservations(
-                oracle_hostname, token, oracle_app_key, oracle_enterprise_id, oracle_hotel_id,
-                oracle_start_date, oracle_end_date, progress_id=oracle_progress_id
-            )
+        # Sent as a file part (Blob) from the browser, not a plain form field —
+        # plain multipart fields are capped at ~500KB by Werkzeug's
+        # max_form_memory_size regardless of MAX_CONTENT_LENGTH, and a
+        # multi-day live folio pull easily exceeds that.
+        api_folio_records = json.loads(api_folio_records_file.read()) if api_folio_records_file else None
+        try:
+            api_folio_adjustment_percent = float(request.form.get('api_folio_adjustment_percent') or 0)
+        except (ValueError, TypeError):
+            api_folio_adjustment_percent = 0.0
 
-        result     = run_analysis(dva_raw, res_raw, blk_raw, folio_raw, arrivals_raw, arrivals_filename,
-                                   arrivals_df=live_arrivals_df)
-        xlsx_bytes = build_excel(result)
-        result['xlsx_b64'] = base64.b64encode(xlsx_bytes).decode()
+        result     = run_analysis(dva_raw, res_raw, folio_raw, arrivals_raw, arrivals_filename,
+                                   cashier_journal_raw=cashier_journal_raw,
+                                   cashier_journal_filename=cashier_journal_filename,
+                                   api_folio_records=api_folio_records,
+                                   api_folio_adjustment_percent=api_folio_adjustment_percent)
 
-        # Extract hotel ID from DVA filename (e.g. "ho669921" from "..._ho669921_...")
-        hotel_id_match = re.search(r'ho\d+', dva_file.filename or '', re.IGNORECASE)
-        result['hotel_id'] = hotel_id_match.group(0).lower() if hotel_id_match else ''
+        if result.get('no_dva'):
+            result['xlsx_b64'] = None
+        else:
+            xlsx_bytes = build_excel(result)
+            result['xlsx_b64'] = base64.b64encode(xlsx_bytes).decode()
+
+        # Extract hotel ID from whichever filename carries the "hoNNNNN" pattern
+        hotel_id = ''
+        for f in (dva_file, res_file, folio_file, arrivals_file):
+            if f and f.filename:
+                m = re.search(r'ho\d+', f.filename, re.IGNORECASE)
+                if m:
+                    hotel_id = m.group(0).lower()
+                    break
+        result['hotel_id'] = hotel_id
 
         # Store uploaded files for Monday submission
         session_id = str(uuid.uuid4())
         _file_store[session_id] = {
-            'dva':      (dva_file.filename   or 'dva.xlsx',        dva_raw),
-            'bookings': (res_file.filename   or 'bookings.tsv',    res_raw)   if res_raw   else None,
-            'blocks':   (blk_file.filename   or 'blocks.tsv',      blk_raw)   if blk_raw   else None,
-            'folio':    (folio_file.filename or 'folio.tsv',        folio_raw)    if folio_raw    else None,
-            'arrivals': (arrivals_file.filename or 'arrivals.xml', arrivals_raw) if arrivals_raw else (
-                (f"oracle_live_fetch_{oracle_hotel_id}_{oracle_start_date}_to_{oracle_end_date}.csv",
-                 live_arrivals_df.to_csv(index=False).encode()) if use_live_oracle and live_arrivals_df is not None and not live_arrivals_df.empty else None
-            ),
-            'xlsx':     (f"DQE_{result.get('hotel_name','report')}_{result.get('analysis_date','')}.xlsx".replace(' ','_'), xlsx_bytes),
+            'dva':      (dva_file.filename   or 'dva.xlsx',        dva_raw)      if dva_raw      else None,
+            'bookings': (res_file.filename   or 'bookings.tsv',    res_raw)      if res_raw      else None,
+            'folio':    (folio_file.filename or 'folio.tsv',       folio_raw)    if folio_raw    else None,
+            'arrivals': (arrivals_file.filename or 'arrivals.xml', arrivals_raw) if arrivals_raw else None,
+            'xlsx':     (f"DQE_{result.get('hotel_name','report')}_{result.get('analysis_date','')}.xlsx".replace(' ','_'), base64.b64decode(result['xlsx_b64'])) if result.get('xlsx_b64') else None,
         }
         result['session_id'] = session_id
 
@@ -2566,17 +2760,6 @@ def analyze():
             result['run_id'] = save_run(result)
         except Exception as hist_err:
             print(f"[history] failed to save run: {hist_err}")
-
-        # Save Oracle credentials for this hotel if a live fetch was used, so
-        # the next run for the same hotel doesn't require re-entering them.
-        if use_live_oracle and result.get('hotel_id'):
-            try:
-                save_oracle_credentials(
-                    result['hotel_id'], oracle_hostname, oracle_client_id, oracle_client_secret,
-                    oracle_app_key, oracle_enterprise_id, environment=oracle_environment
-                )
-            except Exception as cred_err:
-                print(f"[oracle creds] failed to save: {cred_err}")
 
         # Fire an optional webhook/Slack notification on completion
         webhook_url = request.form.get('webhook_url')
@@ -2688,6 +2871,57 @@ def oracle_credentials_last():
     creds['client_secret'] = ''  # never send the secret back
     creds['hotel_id'] = last['hotel_id']
     return jsonify(creds)
+
+
+@app.route('/connections', methods=['GET'])
+def connections_list():
+    return jsonify(list_connections())
+
+
+@app.route('/connections', methods=['POST'])
+def connections_save():
+    body = dict(request.get_json(force=True) or {})
+    name = (body.get('name') or '').strip()
+    if not name:
+        return jsonify({'error': 'A name is required to save a connection.'}), 400
+    conn_id = save_connection(name, body)
+    return jsonify({'id': conn_id, 'name': name})
+
+
+@app.route('/connections/<conn_id>', methods=['GET'])
+def connections_get(conn_id):
+    """
+    Returns the FULL record including the real client_secret/password — the
+    whole point of Saved Connections is switching between hotels without
+    retyping anything, and this only ever runs locally on the user's own
+    machine (explicit call, not a security boundary for a shared service).
+    """
+    row = get_connection(conn_id)
+    if not row:
+        return jsonify({'error': 'Connection not found'}), 404
+    return jsonify(row)
+
+
+@app.route('/connections/<conn_id>', methods=['DELETE'])
+def connections_delete(conn_id):
+    delete_connection(conn_id)
+    return jsonify({'ok': True})
+
+
+@app.route('/settings/folio_percent', methods=['GET'])
+def get_folio_percent_route():
+    return jsonify({'percent': get_folio_adjustment_percent()})
+
+
+@app.route('/settings/folio_percent', methods=['POST'])
+def set_folio_percent_route():
+    body = dict(request.get_json(force=True) or {})
+    try:
+        percent = float(body.get('percent', 0))
+    except (ValueError, TypeError):
+        return jsonify({'error': 'percent must be a number'}), 400
+    set_folio_adjustment_percent(percent)
+    return jsonify({'ok': True, 'percent': percent})
 
 
 @app.route('/readiness_check', methods=['POST'])
@@ -2872,7 +3106,6 @@ def submit_monday():
             ('xlsx',     MONDAY_COLS['excel_report'],  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'),
             ('dva',      MONDAY_COLS['dva_file'],       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'),
             ('bookings', MONDAY_COLS['bookings_file'],  'text/tab-separated-values'),
-            ('blocks',   MONDAY_COLS['blocks_file'],    'text/tab-separated-values'),
             ('folio',    MONDAY_COLS['folio_file'],     'text/tab-separated-values'),
             ('arrivals', MONDAY_COLS['arrivals_file'],  None),  # MIME determined by filename
         ]

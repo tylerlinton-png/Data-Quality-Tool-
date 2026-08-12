@@ -101,6 +101,18 @@
   .cred-status-row {
     display: flex; align-items: center; gap: 10px; margin-top: 16px;
   }
+  .saved-connections-row {
+    display: flex; align-items: flex-end; gap: 8px; flex-wrap: wrap;
+    margin-bottom: 18px; padding-bottom: 16px; border-bottom: 1px solid var(--border);
+  }
+  .saved-connections-row label {
+    font-size: .72rem; font-weight: 600; color: var(--text-mid);
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .saved-connections-row select {
+    font-family: inherit; font-size: .82rem; padding: 8px 10px;
+    border: 1px solid var(--border-mid); border-radius: 8px; background: #fff; color: var(--text); width: 100%;
+  }
   .cred-status-badge {
     font-size: .78rem; font-weight: 700; padding: 5px 12px; border-radius: 999px;
   }
@@ -226,51 +238,6 @@
     word-break: break-all;
     pointer-events: none;
   }
-
-  /* ── Oracle OHIP live connection panel ── */
-  .oracle-toggle-row { text-align: center; margin: 4px 0 18px; }
-  .oracle-toggle-link {
-    background: none; border: none; cursor: pointer;
-    color: var(--text-mid); font-size: .8rem; font-weight: 600;
-    text-decoration: underline; text-underline-offset: 2px;
-    padding: 4px 8px;
-  }
-  .oracle-toggle-link:hover { color: var(--duetto-dark); }
-
-  .oracle-panel {
-    background: #FAFBFC;
-    border: 1.5px dashed var(--border-mid);
-    border-radius: 12px;
-    padding: 20px 22px;
-    margin-bottom: 20px;
-  }
-  .oracle-panel-hdr { margin-bottom: 14px; }
-  .oracle-panel-hdr span:first-child {
-    display: block; font-weight: 700; font-size: .9rem; color: var(--text);
-  }
-  .oracle-panel-sub { font-size: .78rem; color: var(--muted); }
-
-  .oracle-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 12px 16px;
-    margin-bottom: 16px;
-  }
-  .oracle-grid label {
-    font-size: .72rem; font-weight: 600; color: var(--text-mid);
-    display: flex; flex-direction: column; gap: 4px;
-  }
-  .oracle-grid input {
-    font-family: inherit;
-    font-size: .82rem;
-    font-weight: 400;
-    padding: 8px 10px;
-    border: 1px solid var(--border-mid);
-    border-radius: 8px;
-    background: #fff;
-    color: var(--text);
-  }
-  .oracle-grid input:focus { outline: none; border-color: var(--duetto-green); }
 
   .oracle-actions { display: flex; align-items: center; gap: 12px; }
   .oracle-test-btn {
@@ -826,23 +793,6 @@
   .disc-search-row input:focus { outline: none; border-color: var(--duetto-green); }
   #disc-tbody tr.search-hidden { display: none; }
 
-  .step-hdr {
-    display: flex; align-items: center; gap: 10px;
-    font-size: .95rem; font-weight: 700; color: var(--text);
-    margin: 4px 0 14px;
-  }
-  .step-hdr-sub { font-weight: 400; color: var(--muted); font-size: .78rem; }
-  .step-num {
-    display: inline-flex; align-items: center; justify-content: center;
-    width: 24px; height: 24px; border-radius: 50%;
-    background: var(--duetto-dark); color: var(--duetto-green);
-    font-size: .78rem; font-weight: 800; flex-shrink: 0;
-  }
-  #step2-container {
-    margin-top: 22px; padding-top: 20px; border-top: 1px solid var(--border);
-    transition: opacity .25s ease;
-  }
-  #step2-container.step2-hidden { display: none; }
   .dz-unlocks {
     display: block; font-size: .68rem; color: var(--duetto-green);
     background: var(--duetto-dark); border-radius: 5px; padding: 3px 7px;
@@ -979,6 +929,15 @@
     <p>Enter your Oracle OHIP credentials and validate the connection — this unlocks the actions below. All three actions share these credentials, so you only enter them once.</p>
   </div>
   <div class="upload-card">
+    <div class="saved-connections-row">
+      <label style="flex:1;min-width:200px">Saved Connections
+        <select id="saved-connections-select">
+          <option value="">— Load a saved connection —</option>
+        </select>
+      </label>
+      <button type="button" class="oracle-test-btn" id="save-connection-btn" style="background:transparent;color:var(--duetto-dark);border:1px solid var(--border-mid)">💾 Save As New</button>
+      <button type="button" class="oracle-test-btn" id="delete-connection-btn" style="background:transparent;color:#9B1C2E;border:1px solid var(--border-mid);display:none">🗑 Delete</button>
+    </div>
     <div class="browse-conn-grid">
       <label>Auth Type
         <div class="auth-type-toggle">
@@ -1062,6 +1021,7 @@
         <input type="date" id="browse-end-date"/>
       </label>
     </div>
+
     <div class="oracle-actions" style="margin-top:16px">
       <button type="button" class="run-btn" id="browse-fetch-btn" style="width:auto;margin:0;padding:10px 24px">
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 2.5l10 5.5-10 5.5V2.5z" fill="currentColor"/></svg>
@@ -1069,6 +1029,7 @@
       </button>
     </div>
     <div id="browse-progress-row" style="display:none;margin-top:10px;font-size:.78rem;color:var(--muted)"></div>
+    <div id="browse-folio-pull-note" style="display:none;margin-top:10px;font-size:.78rem;color:var(--muted)"></div>
 
     <div id="browse-results" style="display:none;margin-top:20px">
       <div class="section-label">
@@ -1124,103 +1085,93 @@
   <!-- Upload section -->
   <div class="action-card-hdr">
     <h2>🔍 Upload DVA &amp; Compare</h2>
-    <p>Upload your DVA and Duetto export files to identify and root-cause discrepancies between Duetto and your PMS. Works with or without validated credentials — validate above to also pull live arrival data instead of uploading an Arrival Details Report.</p>
+    <p>Every file below is optional — upload whichever ones you have. A DVA unlocks the full accuracy/discrepancy report; without one, you'll get whatever comparison the files you do upload support (e.g. Bookings vs. Arrivals, or a Folio variance check).</p>
   </div>
   <div class="upload-card">
 
-    <div class="step-hdr">
-      <span class="step-num">1</span>
-      <span>Upload the DVA File <span class="step-hdr-sub">— the only required input</span></span>
-    </div>
     <div class="drop-grid">
       <div class="drop-zone" id="zone-comp">
         <input type="file" id="file-comp" accept=".xlsx,.xls"/>
-        <span class="dz-required">Required</span>
+        <span class="dz-optional">Optional</span>
         <span class="dz-icon">📊</span>
         <span class="dz-label">DVA File</span>
         <span class="dz-hint">.xlsx · Duetto Data Validation results</span>
+        <span class="dz-unlocks">Unlocks: full rooms/revenue accuracy scoring &amp; discrepancy root-cause</span>
         <div class="dz-filename" id="name-comp"></div>
+      </div>
+
+      <div class="drop-zone" id="zone-res">
+        <input type="file" id="file-res" accept=".tsv,.csv,.txt"/>
+        <span class="dz-optional">Optional</span>
+        <span class="dz-icon">🛎️</span>
+        <span class="dz-label">Bookings Report</span>
+        <span class="dz-hint">.tsv / .csv · Duetto flat bookings export</span>
+        <span class="dz-unlocks">Unlocks: reservation-level root-cause &amp; Bookings-vs-Arrivals reconciliation</span>
+        <div class="dz-filename" id="name-res"></div>
+      </div>
+
+      <div class="drop-zone" id="zone-folio">
+        <input type="file" id="file-folio" accept=".tsv,.csv,.txt"/>
+        <span class="dz-optional">Optional</span>
+        <span class="dz-icon">🧾</span>
+        <span class="dz-label">Folio Report</span>
+        <span class="dz-hint">.tsv / .csv · Duetto flat folio export</span>
+        <span class="dz-unlocks">Unlocks: revenue root-causing via unmapped transaction codes</span>
+        <div class="dz-filename" id="name-folio"></div>
+      </div>
+
+      <div class="drop-zone" id="zone-arrivals">
+        <input type="file" id="file-arrivals" accept=".xml,.pdf,.txt"/>
+        <span class="dz-optional">Optional</span>
+        <span class="dz-icon">📋</span>
+        <span class="dz-label">Arrival Details Report</span>
+        <span class="dz-hint">.xml, .pdf or .txt · Opera arrivals export</span>
+        <span class="dz-unlocks">Unlocks: PMS sync-gap detection, rate mismatch checks &amp; Bookings-vs-Arrivals reconciliation</span>
+        <div class="dz-filename" id="name-arrivals"></div>
+      </div>
+
+      <div class="drop-zone" id="zone-cashier-journal">
+        <input type="file" id="file-cashier-journal" accept=".xlsx,.xls,.xml,.txt,.tsv,.csv"/>
+        <span class="dz-optional">Optional</span>
+        <span class="dz-icon">💵</span>
+        <span class="dz-label">PMS Cashier Journal</span>
+        <span class="dz-hint">.xlsx, .xml or .txt · Opera "Journal by Cashier and Transaction Code"</span>
+        <span class="dz-unlocks">Unlocks: transaction-level Folio variance vs. the PMS's own ledger (requires Folio Report above)</span>
+        <div class="dz-filename" id="name-cashier-journal"></div>
+      </div>
+
+      <div class="drop-zone" id="zone-api-folio-pull" style="cursor:default">
+        <span class="dz-optional">Optional</span>
+        <span class="dz-icon">📡</span>
+        <span class="dz-label">Live API Folio Pull</span>
+        <span class="dz-hint">Pulled directly from OHIP — not a file</span>
+        <span class="dz-unlocks">Unlocks: API vs. Duetto Folio Report bucket reconciliation, side-by-side (requires Folio Report above)</span>
+        <div class="dz-filename" id="api-folio-pull-status"></div>
+
+        <div style="margin-top:10px;text-align:left;width:100%">
+          <label style="display:block;font-size:.72rem;color:var(--muted);margin-bottom:4px">
+            Gross → Net Adjustment (%)
+            <input type="number" id="api-folio-adjustment-percent" min="0" max="100" step="0.1" placeholder="e.g. 15"
+                   style="width:100%;margin-top:2px;padding:6px 8px;font-size:.8rem;border:1px solid var(--border-mid);border-radius:6px"/>
+          </label>
+          <div id="api-folio-pull-controls" style="display:flex;gap:6px;margin-top:6px">
+            <input type="date" id="api-folio-pull-start" style="flex:1;padding:6px 8px;font-size:.78rem;border:1px solid var(--border-mid);border-radius:6px"/>
+            <input type="date" id="api-folio-pull-end" style="flex:1;padding:6px 8px;font-size:.78rem;border:1px solid var(--border-mid);border-radius:6px"/>
+          </div>
+          <button type="button" class="oracle-test-btn" id="api-folio-pull-btn" style="width:100%;margin-top:6px;background:transparent;color:var(--duetto-dark);border:1px solid var(--border-mid)">
+            Pull Live Data Now
+          </button>
+          <button type="button" class="oracle-test-btn" id="api-folio-pull-clear-btn" style="width:100%;margin-top:6px;display:none;background:transparent;color:#9B1C2E;border:1px solid var(--border-mid)">
+            Clear Pulled Data
+          </button>
+        </div>
       </div>
     </div>
 
-    <div id="step2-container" class="step2-hidden">
-      <div class="step-hdr">
-        <span class="step-num">2</span>
-        <span>Add Optional Files <span class="step-hdr-sub">— each one unlocks deeper root-cause analysis</span></span>
-      </div>
-      <div class="drop-grid">
-        <div class="drop-zone" id="zone-res">
-          <input type="file" id="file-res" accept=".tsv,.csv,.txt"/>
-          <span class="dz-optional">Optional</span>
-          <span class="dz-icon">🛎️</span>
-          <span class="dz-label">Bookings Report</span>
-          <span class="dz-hint">.tsv / .csv · Duetto flat bookings export</span>
-          <span class="dz-unlocks">Unlocks: reservation-level root-cause & missing-booking detection</span>
-          <div class="dz-filename" id="name-res"></div>
-        </div>
-
-        <div class="drop-zone" id="zone-blk">
-          <input type="file" id="file-blk" accept=".tsv,.csv,.txt"/>
-          <span class="dz-optional">Optional</span>
-          <span class="dz-icon">🏨</span>
-          <span class="dz-label">Blocks Report</span>
-          <span class="dz-hint">.tsv / .csv · Duetto flat blocks export</span>
-          <span class="dz-unlocks">Unlocks: block-reservation context for room discrepancies</span>
-          <div class="dz-filename" id="name-blk"></div>
-        </div>
-
-        <div class="drop-zone" id="zone-folio">
-          <input type="file" id="file-folio" accept=".tsv,.csv,.txt"/>
-          <span class="dz-optional">Optional</span>
-          <span class="dz-icon">🧾</span>
-          <span class="dz-label">Folio Report</span>
-          <span class="dz-hint">.tsv / .csv · Duetto flat folio export</span>
-          <span class="dz-unlocks">Unlocks: revenue root-causing via unmapped transaction codes</span>
-          <div class="dz-filename" id="name-folio"></div>
-        </div>
-
-        <div class="drop-zone" id="zone-arrivals">
-          <input type="file" id="file-arrivals" accept=".xml,.pdf,.txt"/>
-          <span class="dz-optional">Optional</span>
-          <span class="dz-icon">📋</span>
-          <span class="dz-label">Arrival Details Report</span>
-          <span class="dz-hint">.xml, .pdf or .txt · Opera arrivals export</span>
-          <span class="dz-unlocks">Unlocks: PMS sync-gap detection & rate mismatch checks</span>
-          <div class="dz-filename" id="name-arrivals"></div>
-        </div>
-      </div>
-
-      <div class="oracle-toggle-row">
-        <button type="button" class="oracle-toggle-link" id="oracle-toggle-btn">
-          🔌 Or pull live arrivals via Oracle OHIP instead of uploading a file
-        </button>
-      </div>
-
-      <div class="oracle-panel" id="oracle-panel" style="display:none">
-        <div class="oracle-panel-hdr">
-          <span>Live Oracle Arrivals</span>
-          <span class="oracle-panel-sub">Uses the credentials validated in Step 1 above. Pulls arrival reservations directly from Oracle — no manual export needed. Overrides the Arrival Details Report file above.</span>
-        </div>
-        <div class="oracle-grid">
-          <label>Start Stay Date
-            <input type="date" id="oracle-start-date"/>
-          </label>
-          <label>End Stay Date
-            <input type="date" id="oracle-end-date"/>
-          </label>
-        </div>
-        <div class="oracle-actions">
-          <button type="button" class="oracle-test-btn" id="oracle-test-btn">Test Connection</button>
-          <span id="oracle-test-result"></span>
-        </div>
-        <div id="oracle-progress-row" style="display:none;margin-top:10px;font-size:.78rem;color:var(--muted)"></div>
-      </div>
-
-      <div class="webhook-row">
-        <label>Webhook / Slack URL <span style="font-weight:400;color:var(--muted)">(optional — get notified when this run completes)</span>
-          <input type="text" id="webhook-url" placeholder="https://hooks.slack.com/services/..."/>
-        </label>
-      </div>
+    <div class="webhook-row">
+      <label>Webhook / Slack URL <span style="font-weight:400;color:var(--muted)">(optional — get notified when this run completes)</span>
+        <input type="text" id="webhook-url" placeholder="https://hooks.slack.com/services/..."/>
+      </label>
     </div>
 
     <button class="run-btn" id="run-btn" disabled>
@@ -1252,9 +1203,11 @@
     <!-- Result tabs -->
     <div class="result-tabs" id="result-tabs">
       <button class="result-tab active" data-tab="tab-summary">Summary</button>
-      <button class="result-tab" data-tab="tab-discrepancies">Discrepancies <span class="result-tab-badge" id="tab-badge-disc"></span></button>
+      <button class="result-tab" data-tab="tab-discrepancies" id="tab-btn-disc">Discrepancies <span class="result-tab-badge" id="tab-badge-disc"></span></button>
       <button class="result-tab" data-tab="tab-reconciliation" id="tab-btn-recon" style="display:none">Reconciliation</button>
-      <button class="result-tab" data-tab="tab-recommendations">Recommendations</button>
+      <button class="result-tab" data-tab="tab-cashier-journal" id="tab-btn-cashier-journal" style="display:none">Folio Variance <span class="result-tab-badge" id="tab-badge-cashier-journal"></span></button>
+      <button class="result-tab" data-tab="tab-api-folio" id="tab-btn-api-folio" style="display:none">API Folio Comparison <span class="result-tab-badge" id="tab-badge-api-folio"></span></button>
+      <button class="result-tab" data-tab="tab-recommendations" id="tab-btn-recs">Recommendations</button>
     </div>
 
     <!-- ── Summary tab ── -->
@@ -1340,6 +1293,16 @@
 
       <!-- Arrivals cross-reference -->
       <div id="arrivals-xref-section" style="display:none;margin-bottom:24px"></div>
+    </div>
+
+    <!-- ── Folio Variance tab (shown only when a Cashier Journal was uploaded) ── -->
+    <div class="result-tab-panel" id="tab-cashier-journal" style="display:none">
+      <div id="cashier-journal-content"></div>
+    </div>
+
+    <!-- ── API Folio Comparison tab (shown only when a live API pull was attached) ── -->
+    <div class="result-tab-panel" id="tab-api-folio" style="display:none">
+      <div id="api-folio-content"></div>
     </div>
 
     <!-- ── Recommendations tab ── -->
@@ -1612,6 +1575,73 @@
 
   setLockedState(false);
 
+  // ══════════════ Saved Connections (Postman-style named credential bundles) ══════════════
+  function populateSavedConnectionsSelect(connections, selectedId) {
+    const sel = document.getElementById('saved-connections-select');
+    sel.innerHTML = '<option value="">— Load a saved connection —</option>' +
+      connections.map(c => `<option value="${c.id}">${escHtml(c.name)} (${escHtml(c.hotel_id || '')}, ${escHtml(c.environment)})</option>`).join('');
+    if (selectedId) sel.value = selectedId;
+  }
+
+  function loadSavedConnectionsList(selectedId) {
+    fetch('/connections').then(r => r.json()).then(list => populateSavedConnectionsSelect(list, selectedId))
+      .catch(() => {});
+  }
+  loadSavedConnectionsList();
+
+  document.getElementById('saved-connections-select').addEventListener('change', async (e) => {
+    const id = e.target.value;
+    document.getElementById('delete-connection-btn').style.display = id ? 'inline-block' : 'none';
+    if (!id) return;
+    try {
+      const data = await (await fetch(`/connections/${id}`)).json();
+      if (data.error) { alert(data.error); return; }
+      document.getElementById('cred-hostname').value = data.hostname || '';
+      document.getElementById('cred-hotel-id').value = data.hotel_id || '';
+      document.getElementById('cred-app-key').value = data.app_key || '';
+      document.getElementById('cred-client-id').value = data.client_id || '';
+      document.getElementById('cred-client-secret').value = data.client_secret || '';
+      document.getElementById('cred-enterprise-id').value = data.enterprise_id || '';
+      document.getElementById('cred-username').value = data.username || '';
+      document.getElementById('cred-password').value = data.password || '';
+      document.getElementById(data.environment === 'demo' ? 'cred-env-demo-btn' : 'cred-env-prod-btn').click();
+      document.getElementById(data.auth_type === 'ssd' ? 'cred-auth-ssd-btn' : 'cred-auth-ocim-btn').click();
+      setCredStatus('pending', `Loaded "${data.name}" — click Validate Connection to connect.`);
+      setLockedState(false);
+    } catch (e) { alert('Could not load connection: ' + e.message); }
+  });
+
+  document.getElementById('save-connection-btn').addEventListener('click', async () => {
+    const currentName = document.getElementById('saved-connections-select').selectedOptions[0]?.textContent.split(' (')[0];
+    const name = prompt('Name this connection (saving under an existing name overwrites it):', currentName || '');
+    if (!name || !name.trim()) return;
+    const creds = getSharedCredentials();
+    try {
+      const resp = await fetch('/connections', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...creds, name: name.trim() }),
+      });
+      const data = await resp.json();
+      if (data.error) { alert(data.error); return; }
+      loadSavedConnectionsList(data.id);
+      document.getElementById('delete-connection-btn').style.display = 'inline-block';
+    } catch (e) { alert('Could not save connection: ' + e.message); }
+  });
+
+  document.getElementById('delete-connection-btn').addEventListener('click', async () => {
+    const sel = document.getElementById('saved-connections-select');
+    const id = sel.value;
+    if (!id) return;
+    const name = sel.selectedOptions[0]?.textContent || 'this connection';
+    if (!confirm(`Delete saved connection "${name}"? This can't be undone.`)) return;
+    try {
+      await fetch(`/connections/${id}`, { method: 'DELETE' });
+      loadSavedConnectionsList();
+      document.getElementById('delete-connection-btn').style.display = 'none';
+    } catch (e) { alert('Could not delete connection: ' + e.message); }
+  });
+
   // ══════════════ Pull Bookings / Blocks / Folio (uses shared credentials) ══════════════
   document.getElementById('browse-data-type').addEventListener('change', (e) => {
     const needsExtSystem = e.target.value === 'blocks';
@@ -1620,6 +1650,31 @@
       document.getElementById('browse-ext-system').value = 'DUETTO1';
     }
   });
+
+  // Gross→Net adjustment % — one global value, remembered across sessions.
+  // Lives on the "Live API Folio Pull" tile in Compare now, not here.
+  fetch('/settings/folio_percent').then(r => r.json()).then(d => {
+    document.getElementById('api-folio-adjustment-percent').value = d.percent || '';
+  }).catch(() => {});
+  document.getElementById('api-folio-adjustment-percent').addEventListener('change', (e) => {
+    const percent = parseFloat(e.target.value) || 0;
+    fetch('/settings/folio_percent', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ percent }),
+    }).catch(() => {});
+  });
+
+  // Require both dates before the fetch button is even clickable — matches
+  // the "don't let the user fetch without a date range" rule enforced again
+  // (defense-in-depth) in the click handler and server-side.
+  function updateBrowseFetchReady() {
+    const hasStart = !!document.getElementById('browse-start-date').value;
+    const hasEnd = !!document.getElementById('browse-end-date').value;
+    document.getElementById('browse-fetch-btn').disabled = !(hasStart && hasEnd);
+  }
+  document.getElementById('browse-start-date').addEventListener('input', updateBrowseFetchReady);
+  document.getElementById('browse-end-date').addEventListener('input', updateBrowseFetchReady);
+  updateBrowseFetchReady();
 
   // ══════════════ Pull Deployment Info / Config Snapshot (uses shared credentials) ══════════════
   document.getElementById('readiness-run-btn').addEventListener('click', async () => {
@@ -1762,27 +1817,30 @@
   let _browseRecords = [];
   document.getElementById('browse-fetch-btn').addEventListener('click', async () => {
     const dataType = document.getElementById('browse-data-type').value;
-    const payload = {
-      ...getSharedCredentials(),
-      data_type: dataType,
-      start_date: document.getElementById('browse-start-date').value,
-      end_date: document.getElementById('browse-end-date').value,
-      ext_system_code: document.getElementById('browse-ext-system').value.trim() || 'DUETTO1',
-    };
+    const creds = getSharedCredentials();
+    const startDate = document.getElementById('browse-start-date').value;
+    const endDate = document.getElementById('browse-end-date').value;
+    const extSystem = document.getElementById('browse-ext-system').value.trim() || 'DUETTO1';
+
     // client_secret is intentionally not required here — it may fall back to
     // a previously saved credential for this hotel_id, checked server-side.
-    const required = ['hostname', 'hotel_id', 'app_key', 'client_id'];
-    const missing = required.filter(k => !payload[k]);
+    const required = { ...creds, start_date: startDate, end_date: endDate };
+    const missing = ['hostname', 'hotel_id', 'app_key', 'client_id', 'start_date', 'end_date'].filter(k => !required[k]);
     if (missing.length) {
-      alert('Missing required field(s): ' + missing.join(', '));
+      const label = missing.includes('start_date') || missing.includes('end_date')
+        ? 'Select a start and end date before fetching.'
+        : 'Missing required field(s): ' + missing.join(', ');
+      alert(label);
       return;
     }
 
     const btn = document.getElementById('browse-fetch-btn');
     btn.disabled = true;
+    const progressRow = document.getElementById('browse-progress-row');
+
+    const payload = { ...creds, data_type: dataType, start_date: startDate, end_date: endDate, ext_system_code: extSystem };
     const progressId = 'browse-' + Date.now();
     payload.progress_id = progressId;
-    const progressRow = document.getElementById('browse-progress-row');
     const pollHandle = browsePollProgress(progressId, progressRow);
 
     try {
@@ -1799,6 +1857,12 @@
         return;
       }
       renderBrowseResults(data);
+      if (dataType === 'folio') {
+        setLastFolioPull(data.records || [], startDate, endDate);
+        document.getElementById('browse-folio-pull-note').style.display = 'block';
+        document.getElementById('browse-folio-pull-note').textContent =
+          `✓ ${(data.records || []).length} folio record(s) cached — usable for API Folio Comparison in Upload DVA & Compare below.`;
+      }
     } catch (e) {
       clearInterval(pollHandle);
       btn.disabled = false;
@@ -1926,20 +1990,78 @@
     document.getElementById('browse-search-count').textContent = q ? `${shown} of ${rows.length} rows` : '';
   });
 
-  // File zones
+  // ══════════════ Live API Folio Pull tile (Upload DVA & Compare) ══════════════
+  // Sourced from either a "Pull Bookings/Blocks/Folio" run above (data type = Folio)
+  // or an inline pull triggered from this tile — either way it's cached here and
+  // sent alongside the Duetto Folio Report file when Run Analysis is clicked.
+  let _lastFolioPull = null; // { records, start, end }
+
+  function setLastFolioPull(records, start, end) {
+    _lastFolioPull = { records, start, end };
+    const statusEl = document.getElementById('api-folio-pull-status');
+    statusEl.textContent = `✓ ${records.length} record(s) — ${start} to ${end}`;
+    statusEl.className = 'dz-filename valid';
+    document.getElementById('zone-api-folio-pull').classList.add('has-file');
+    document.getElementById('api-folio-pull-clear-btn').style.display = 'block';
+    checkReady();
+  }
+
+  document.getElementById('api-folio-pull-clear-btn').addEventListener('click', () => {
+    _lastFolioPull = null;
+    document.getElementById('api-folio-pull-status').textContent = '';
+    document.getElementById('api-folio-pull-status').className = 'dz-filename';
+    document.getElementById('zone-api-folio-pull').classList.remove('has-file');
+    document.getElementById('api-folio-pull-clear-btn').style.display = 'none';
+    document.getElementById('browse-folio-pull-note').style.display = 'none';
+    checkReady();
+  });
+
+  document.getElementById('api-folio-pull-btn').addEventListener('click', async () => {
+    const creds = getSharedCredentials();
+    const startDate = document.getElementById('api-folio-pull-start').value;
+    const endDate = document.getElementById('api-folio-pull-end').value;
+    const required = { ...creds, start_date: startDate, end_date: endDate };
+    const missing = ['hostname', 'hotel_id', 'app_key', 'client_id', 'start_date', 'end_date'].filter(k => !required[k]);
+    if (missing.length) {
+      alert(missing.includes('start_date') || missing.includes('end_date')
+        ? 'Select a start and end date to pull.'
+        : 'Missing required field(s): ' + missing.join(', '));
+      return;
+    }
+    const btn = document.getElementById('api-folio-pull-btn');
+    btn.disabled = true;
+    btn.textContent = '⏳ Pulling…';
+    try {
+      const resp = await fetch('/browse_oracle', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...creds, data_type: 'folio', start_date: startDate, end_date: endDate }),
+      });
+      const data = await resp.json();
+      btn.disabled = false;
+      btn.textContent = 'Pull Live Data Now';
+      if (data.error) { alert('Error: ' + data.error); return; }
+      setLastFolioPull(data.records || [], startDate, endDate);
+    } catch (e) {
+      btn.disabled = false;
+      btn.textContent = 'Pull Live Data Now';
+      alert('Fetch error: ' + e.message);
+    }
+  });
+
+  // File zones — every file is optional; Run Analysis enables as soon as any one is present.
   const zones = [
-    { zone: 'zone-comp',  input: 'file-comp',  label: 'name-comp',  required: true  },
+    { zone: 'zone-comp',  input: 'file-comp',  label: 'name-comp',  required: false },
     { zone: 'zone-res',   input: 'file-res',   label: 'name-res',   required: false },
-    { zone: 'zone-blk',   input: 'file-blk',   label: 'name-blk',   required: false },
     { zone: 'zone-folio',    input: 'file-folio',    label: 'name-folio',    required: false },
     { zone: 'zone-arrivals', input: 'file-arrivals', label: 'name-arrivals', required: false },
+    { zone: 'zone-cashier-journal', input: 'file-cashier-journal', label: 'name-cashier-journal', required: false },
   ];
 
   // Expected header keywords per file, for lightweight client-side validation.
   // Not exhaustive — just enough to catch "wrong file uploaded" mistakes early.
   const EXPECTED_HEADERS = {
     'file-res':      ['STAY_DATE'],
-    'file-blk':      ['STAY_DATE'],
     'file-folio':    ['STAY_DATE'],
     'file-arrivals': ['CONFIRMATION_NO', 'ARRIVAL', 'DEPARTURE'],
   };
@@ -1967,10 +2089,6 @@
     reader.readAsText(file.slice(0, 2000)); // just the first chunk is enough for a header check
   }
 
-  function revealStep2() {
-    document.getElementById('step2-container').classList.remove('step2-hidden');
-  }
-
   zones.forEach(({ zone, input, label }) => {
     const zEl = document.getElementById(zone);
     const iEl = document.getElementById(input);
@@ -1981,7 +2099,6 @@
       zEl.classList.toggle('has-file', !!file);
       if (file) {
         validateFileInline(file, input, lEl);
-        if (input === 'file-comp') revealStep2();
       } else {
         lEl.textContent = ''; lEl.className = 'dz-filename';
       }
@@ -1997,101 +2114,16 @@
       const dt = new DataTransfer(); dt.items.add(file); iEl.files = dt.files;
       validateFileInline(file, input, lEl);
       zEl.classList.add('has-file');
-      if (input === 'file-comp') revealStep2();
       checkReady();
     });
   });
 
+  // Run Analysis enables as soon as ANY file is present (or a live API pull is attached).
   function checkReady() {
-    document.getElementById('run-btn').disabled = !document.getElementById('file-comp').files[0];
+    const anyFile = zones.some(({ input }) => document.getElementById(input).files[0]);
+    document.getElementById('run-btn').disabled = !(anyFile || _lastFolioPull);
   }
-
-  // ── Oracle OHIP live connection panel ──────────────────────────────────────
-  document.getElementById('oracle-toggle-btn').addEventListener('click', () => {
-    const panel = document.getElementById('oracle-panel');
-    const visible = panel.style.display !== 'none';
-    panel.style.display = visible ? 'none' : 'block';
-    document.getElementById('oracle-toggle-btn').textContent = visible
-      ? '🔌 Or connect live via Oracle OHIP API instead of uploading a file'
-      : '📋 Or upload an Arrival Details Report file instead';
-  });
-
-  function getOracleFields() {
-    return {
-      ...getSharedCredentials(),
-      start_date: document.getElementById('oracle-start-date').value,
-      end_date:   document.getElementById('oracle-end-date').value,
-    };
-  }
-
-  function oracleFieldsComplete(fields) {
-    // client_secret may be intentionally blank when reusing saved credentials —
-    // the server falls back to the saved secret for this hotel_id in that case.
-    return Object.entries(fields).every(([k, v]) => k === 'client_secret' || v);
-  }
-
-  function pollOracleProgress(progressId, rowEl) {
-    rowEl.style.display = 'block';
-    const interval = setInterval(async () => {
-      try {
-        const resp = await fetch(`/oracle_progress/${progressId}`);
-        const p = await resp.json();
-        if (p.status === 'fetching') {
-          rowEl.textContent = `⏳ Fetching page ${p.page}… ${p.total_fetched} records so far`;
-        } else if (p.status === 'rate_limited') {
-          rowEl.textContent = `⚠ Rate limited by Oracle — backing off (page ${p.page}, ${p.total_fetched} so far)`;
-        } else if (p.status === 'done') {
-          rowEl.textContent = `✓ Fetch complete — ${p.total_fetched} records across ${p.page} page(s)`;
-          clearInterval(interval);
-        } else if (p.status === 'error') {
-          clearInterval(interval);
-        }
-      } catch (e) { /* ignore transient poll errors */ }
-    }, 800);
-    return interval;
-  }
-
-  document.getElementById('oracle-test-btn').addEventListener('click', async () => {
-    const fields = getOracleFields();
-    const resultEl = document.getElementById('oracle-test-result');
-    const progressRow = document.getElementById('oracle-progress-row');
-    if (!oracleFieldsComplete(fields)) {
-      resultEl.textContent = 'Fill in all fields above first.';
-      resultEl.className = 'err';
-      return;
-    }
-    const btn = document.getElementById('oracle-test-btn');
-    btn.disabled = true;
-    resultEl.textContent = 'Testing…';
-    resultEl.className = '';
-    const progressId = 'test-' + Date.now();
-    const pollHandle = pollOracleProgress(progressId, progressRow);
-    try {
-      const resp = await fetch('/fetch_oracle_arrivals', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...fields, progress_id: progressId }),
-      });
-      const data = await resp.json();
-      btn.disabled = false;
-      clearInterval(pollHandle);
-      if (data.error) {
-        resultEl.textContent = '✗ ' + data.error;
-        resultEl.className = 'err';
-      } else if (data.rows === 0) {
-        resultEl.textContent = '⚠ Connected, but no reservations found for this window.';
-        resultEl.className = 'err';
-      } else {
-        resultEl.textContent = `✓ Connected — ${data.rows} rows, ${data.confirmations} reservations (${data.date_range[0]} to ${data.date_range[1]})`;
-        resultEl.className = 'ok';
-      }
-    } catch (e) {
-      clearInterval(pollHandle);
-      btn.disabled = false;
-      resultEl.textContent = '✗ ' + e.message;
-      resultEl.className = 'err';
-    }
-  });
+  checkReady();
 
   // Run
   document.getElementById('run-btn').addEventListener('click', async () => {
@@ -2101,50 +2133,31 @@
     document.getElementById('run-btn').disabled = true;
 
     const fd = new FormData();
-    fd.append('comparison', document.getElementById('file-comp').files[0]);
-    const r = document.getElementById('file-res').files[0];
-    const b = document.getElementById('file-blk').files[0];
-    const f = document.getElementById('file-folio').files[0];
-    const a = document.getElementById('file-arrivals').files[0];
-    if (r) fd.append('reservations', r);
-    if (b) fd.append('blocks', b);
-    if (f) fd.append('folio', f);
+    const c  = document.getElementById('file-comp').files[0];
+    const r  = document.getElementById('file-res').files[0];
+    const f  = document.getElementById('file-folio').files[0];
+    const a  = document.getElementById('file-arrivals').files[0];
+    const cj = document.getElementById('file-cashier-journal').files[0];
+    if (c)  fd.append('comparison', c);
+    if (r)  fd.append('reservations', r);
+    if (f)  fd.append('folio', f);
+    if (a)  fd.append('arrivals', a);
+    if (cj) fd.append('cashier_journal', cj);
+    if (_lastFolioPull) {
+      // Sent as a file part (Blob), not a plain form field — plain fields are
+      // capped at ~500KB by Werkzeug's max_form_memory_size regardless of
+      // MAX_CONTENT_LENGTH, and a multi-day pull easily exceeds that.
+      const blob = new Blob([JSON.stringify(_lastFolioPull.records)], { type: 'application/json' });
+      fd.append('api_folio_records', blob, 'api_folio_records.json');
+      fd.append('api_folio_adjustment_percent', document.getElementById('api-folio-adjustment-percent').value || '0');
+    }
 
     const webhookUrl = document.getElementById('webhook-url').value.trim();
     if (webhookUrl) fd.append('webhook_url', webhookUrl);
 
-    const oraclePanelOpen = document.getElementById('oracle-panel').style.display !== 'none';
-    const oracleFields = getOracleFields();
-    let runProgressHandle = null;
-    if (oraclePanelOpen && !a && oracleFieldsComplete(oracleFields)) {
-      fd.append('oracle_environment', oracleFields.environment);
-      fd.append('oracle_hostname', oracleFields.hostname);
-      fd.append('oracle_client_id', oracleFields.client_id);
-      fd.append('oracle_client_secret', oracleFields.client_secret);
-      fd.append('oracle_app_key', oracleFields.app_key);
-      fd.append('oracle_enterprise_id', oracleFields.enterprise_id);
-      fd.append('oracle_hotel_id', oracleFields.hotel_id);
-      fd.append('oracle_start_date', oracleFields.start_date);
-      fd.append('oracle_end_date', oracleFields.end_date);
-      const progressId = 'run-' + Date.now();
-      fd.append('oracle_progress_id', progressId);
-      const spinnerSpan = document.querySelector('#spinner .spinner-wrap span');
-      runProgressHandle = setInterval(async () => {
-        try {
-          const p = await (await fetch(`/oracle_progress/${progressId}`)).json();
-          if (p.status === 'fetching') spinnerSpan.textContent = `Fetching from Oracle — page ${p.page}, ${p.total_fetched} records so far…`;
-          else if (p.status === 'rate_limited') spinnerSpan.textContent = `Oracle rate-limited us — retrying with backoff…`;
-          else if (p.status === 'done') spinnerSpan.textContent = `Oracle fetch complete (${p.total_fetched} records) — running analysis…`;
-        } catch (e) { /* ignore */ }
-      }, 800);
-    } else if (a) {
-      fd.append('arrivals', a);
-    }
-
     try {
       const resp = await fetch('/analyze', { method: 'POST', body: fd });
       const data = await resp.json();
-      if (runProgressHandle) clearInterval(runProgressHandle);
       document.getElementById('spinner').style.display = 'none';
       document.getElementById('run-btn').disabled = false;
 
@@ -2156,7 +2169,6 @@
       window._lastResult = data;  // includes session_id for Monday file uploads
       renderReport(data);
     } catch(e) {
-      if (runProgressHandle) clearInterval(runProgressHandle);
       document.getElementById('spinner').style.display = 'none';
       document.getElementById('run-btn').disabled = false;
       document.getElementById('error-container').innerHTML =
@@ -2207,15 +2219,37 @@
     document.getElementById('report-period').textContent =
       data.date_range ? `Period: ${data.date_range}` : '';
 
-    // Accuracy cards
-    [['rooms', data.room_accuracy, data.total_days], ['rev', data.rev_accuracy, data.total_days]].forEach(([key, val, days]) => {
-      const failDays = Math.round((1 - val/100) * days);
-      const card = document.getElementById(`card-${key}`);
-      card.className = `acc-card ${accClass(val)}`;
-      document.getElementById(`val-${key}`).textContent = `${val.toFixed(1)}%`;
-      document.getElementById(`sub-${key}`).textContent =
-        failDays === 0 ? 'All days match' : `${failDays} day${failDays!==1?'s':''} with discrepancies`;
-    });
+    // Accuracy cards — only meaningful when a DVA was uploaded (they compare
+    // against Duetto's PMS-commit numbers, which only the DVA carries).
+    const noDva = !!data.no_dva;
+    document.getElementById('tab-btn-disc').style.display = noDva ? 'none' : 'inline-block';
+    document.getElementById('tab-btn-recs').style.display = noDva ? 'none' : 'inline-block';
+    document.querySelector('.dl-row').style.display = noDva ? 'none' : 'flex';
+
+    ['rooms', 'rev'].forEach(key => document.getElementById(`card-${key}`).style.display = noDva ? 'none' : 'flex');
+    if (!noDva) {
+      [['rooms', data.room_accuracy, data.total_days], ['rev', data.rev_accuracy, data.total_days]].forEach(([key, val, days]) => {
+        const failDays = Math.round((1 - val/100) * days);
+        const card = document.getElementById(`card-${key}`);
+        card.className = `acc-card ${accClass(val)}`;
+        document.getElementById(`val-${key}`).textContent = `${val.toFixed(1)}%`;
+        document.getElementById(`sub-${key}`).textContent =
+          failDays === 0 ? 'All days match' : `${failDays} day${failDays!==1?'s':''} with discrepancies`;
+      });
+    }
+
+    let noDvaNote = document.getElementById('no-dva-note');
+    if (noDva) {
+      if (!noDvaNote) {
+        noDvaNote = document.createElement('p');
+        noDvaNote.id = 'no-dva-note';
+        noDvaNote.style.cssText = 'color:var(--muted);font-size:.85rem;margin-bottom:16px';
+        document.querySelector('#tab-summary .accuracy-row').insertAdjacentElement('beforebegin', noDvaNote);
+      }
+      noDvaNote.textContent = 'No DVA was uploaded, so there\'s no Duetto-vs-PMS accuracy score — showing whatever comparison the files you uploaded support instead.';
+    } else if (noDvaNote) {
+      noDvaNote.remove();
+    }
 
     // Bookings vs Arrivals card
     const xrefSummary = data.arrivals_xref && data.arrivals_xref['__summary__'];
@@ -2315,6 +2349,12 @@
 
     // Reconciliation tab only appears when arrivals data was analyzed
     document.getElementById('tab-btn-recon').style.display = xrefSummary ? 'inline-block' : 'none';
+
+    // Folio Variance tab only appears when a Cashier Journal was uploaded
+    renderCashierJournalVariance(data.cashier_journal_variance);
+
+    // API Folio Comparison tab only appears when a live API pull was attached
+    renderApiFolioVariance(data.api_folio_variance);
 
     // Discrepancy count badge on the tab
     const discBadge = document.getElementById('tab-badge-disc');
@@ -2455,6 +2495,130 @@
     document.getElementById('report').scrollIntoView({ behavior: 'smooth' });
   }
 
+  function renderCashierJournalVariance(v) {
+    const tabBtn = document.getElementById('tab-btn-cashier-journal');
+    const badge = document.getElementById('tab-badge-cashier-journal');
+    const content = document.getElementById('cashier-journal-content');
+
+    if (!v) {
+      tabBtn.style.display = 'none';
+      return;
+    }
+    tabBtn.style.display = 'inline-block';
+
+    if (v.status === 'error') {
+      badge.textContent = '';
+      content.innerHTML = `<p style="color:#9B1C2E">${escHtml(v.message || 'Could not compare the Cashier Journal.')}</p>`;
+      return;
+    }
+
+    const issueCount = v.mismatch_count + v.missing_from_journal_count + v.missing_from_duetto_count;
+    badge.textContent = issueCount ? issueCount : '';
+
+    const section = (title, rows, cols, emptyMsg) => `
+      <div class="section-label" style="margin-top:20px">${title} <span style="font-weight:400;color:var(--muted);text-transform:none;letter-spacing:0">(${rows.length})</span></div>
+      ${!rows.length ? `<p style="color:var(--muted);font-size:.82rem">${emptyMsg}</p>` : `
+      <div class="table-outer"><div class="table-scroll">
+        <table class="rule-codes-table">
+          <thead><tr>${cols.map(c => `<th>${escHtml(c[0])}</th>`).join('')}</tr></thead>
+          <tbody>${rows.map(r => `<tr>${cols.map(c => `<td>${escHtml(c[1](r))}</td>`).join('')}</tr>`).join('')}</tbody>
+        </table>
+      </div></div>`}`;
+
+    content.innerHTML = `
+      <div class="accuracy-row">
+        <div class="acc-card"><div class="acc-icon">✓</div><div><div class="acc-label">Matched Transactions</div><div class="acc-value">${v.matched_count}</div></div></div>
+        <div class="acc-card"><div class="acc-icon">⚠</div><div><div class="acc-label">Amount/Code Mismatches</div><div class="acc-value">${v.mismatch_count}</div></div></div>
+        <div class="acc-card"><div class="acc-icon">❓</div><div><div class="acc-label">Missing Somewhere</div><div class="acc-value">${v.missing_from_journal_count + v.missing_from_duetto_count}</div></div></div>
+      </div>
+      ${section('Amount / Code Mismatches', v.mismatches, [
+        ['Transaction ID', r => r.transaction_id], ['Stay Date', r => r.stay_date],
+        ['Duetto Revenue Type', r => r.duetto_revenue_type], ['PMS Trx Code', r => r.pms_trx_code],
+        ['Duetto Amount', r => fmt(r.duetto_amount)], ['PMS Amount', r => fmt(r.pms_amount)], ['Diff', r => fmt(r.diff)],
+      ], 'No matched transactions have an amount or code mismatch.')}
+      ${section('In Duetto Folio, Missing From PMS Journal', v.missing_from_journal, [
+        ['Transaction ID', r => r.transaction_id], ['Stay Date', r => r.stay_date],
+        ['Revenue Type', r => r.revenue_type], ['Amount', r => fmt(r.amount)],
+      ], 'Every Duetto folio transaction was found in the PMS journal.')}
+      ${section('In PMS Journal, Missing From Duetto Folio', v.missing_from_duetto, [
+        ['Transaction ID', r => r.transaction_id], ['Business Date', r => r.business_date],
+        ['Trx Code', r => r.trx_code], ['Description', r => r.trx_desc], ['Amount', r => fmt(r.amount)],
+      ], 'Every PMS journal transaction was found in the Duetto folio.')}
+    `;
+  }
+
+  function renderApiFolioVariance(v) {
+    const tabBtn = document.getElementById('tab-btn-api-folio');
+    const badge = document.getElementById('tab-badge-api-folio');
+    const content = document.getElementById('api-folio-content');
+
+    if (!v) {
+      tabBtn.style.display = 'none';
+      return;
+    }
+    tabBtn.style.display = 'inline-block';
+
+    if (v.status === 'error') {
+      badge.textContent = '';
+      content.innerHTML = `<p style="color:#9B1C2E">${escHtml(v.message || 'Could not compare the live API pull.')}</p>`;
+      return;
+    }
+
+    const issueCount = v.mismatch_count + v.api_only_count + v.duetto_only_count;
+    badge.textContent = issueCount ? issueCount : '';
+
+    const STATUS_LABEL = {
+      matched:     '<span class="badge match">✓ Match</span>',
+      mismatch:    '<span class="badge over">⚠ Mismatch</span>',
+      api_only:    '<span class="badge under">API Only</span>',
+      duetto_only: '<span class="badge under">Duetto Only</span>',
+    };
+
+    const rows = v.rows || [];
+    _apiFolioRows = rows;
+    const rowsHtml = !rows.length
+      ? `<p style="color:var(--muted);font-size:.82rem">No day + transaction-code buckets found on either side.</p>`
+      : `<div class="table-outer"><div class="table-scroll table-scroll-capped">
+        <table class="rule-codes-table">
+          <thead><tr>
+            <th>Stay Date</th><th>Trx Code</th><th>API Gross</th><th>API Adjusted</th><th>Duetto Amount</th><th>Diff</th><th>Status</th>
+          </tr></thead>
+          <tbody>${rows.map(r => `<tr>
+            <td>${escHtml(r.stay_date)}</td>
+            <td>${escHtml(r.transaction_code)}</td>
+            <td>${r.api_gross_amount != null ? fmt(r.api_gross_amount) : '—'}</td>
+            <td>${r.api_adjusted_amount != null ? fmt(r.api_adjusted_amount) : '—'}</td>
+            <td>${r.duetto_amount != null ? fmt(r.duetto_amount) : '—'}</td>
+            <td>${r.diff != null ? fmt(r.diff) : '—'}</td>
+            <td>${STATUS_LABEL[r.status] || r.status}</td>
+          </tr>`).join('')}</tbody>
+        </table>
+      </div></div>`;
+
+    content.innerHTML = `
+      <div class="section-label">API Folio Pull vs. Duetto Folio Report <span style="font-weight:400;color:var(--muted);text-transform:none;letter-spacing:0">(adjusted −${v.adjustment_percent}% for gross→net)</span></div>
+      <div class="accuracy-row">
+        <div class="acc-card"><div class="acc-icon">✓</div><div><div class="acc-label">Matched Buckets</div><div class="acc-value">${v.matched_count}</div></div></div>
+        <div class="acc-card"><div class="acc-icon">⚠</div><div><div class="acc-label">Amount Mismatches</div><div class="acc-value">${v.mismatch_count}</div></div></div>
+        <div class="acc-card"><div class="acc-icon">❓</div><div><div class="acc-label">Missing Somewhere</div><div class="acc-value">${v.api_only_count + v.duetto_only_count}</div></div></div>
+      </div>
+      <div class="disc-search-row" style="justify-content:space-between;margin-top:20px">
+        <div class="section-label" style="margin:0">Side-by-Side by Day + Transaction Code <span style="font-weight:400;color:var(--muted);text-transform:none;letter-spacing:0">(${rows.length} — includes matches)</span></div>
+        <div style="display:flex;gap:8px">
+          <button type="button" class="oracle-test-btn" onclick="downloadApiFolioExport(',', 'csv', 'text/csv')" style="background:transparent;color:var(--duetto-dark);border:1px solid var(--border-mid)">Download CSV</button>
+          <button type="button" class="oracle-test-btn" onclick="downloadApiFolioExport('\\t', 'tsv', 'text/tab-separated-values')" style="background:transparent;color:var(--duetto-dark);border:1px solid var(--border-mid)">Download TSV</button>
+        </div>
+      </div>
+      ${rowsHtml}
+    `;
+  }
+
+  let _apiFolioRows = [];
+  const API_FOLIO_EXPORT_COLUMNS = ['stay_date', 'transaction_code', 'api_gross_amount', 'api_adjusted_amount', 'duetto_amount', 'diff', 'status'];
+  function downloadApiFolioExport(delim, ext, mime) {
+    downloadDelimited(_apiFolioRows, API_FOLIO_EXPORT_COLUMNS, 'dqe_api_folio_comparison', delim, ext, mime);
+  }
+
   function formatFolio(s) {
     return escHtml(s).replace(/⚑[^\n<]*/g, m => `<span class="folio-match">${m}</span>`);
   }
@@ -2510,7 +2674,6 @@
     const files = [];
     if (document.getElementById('file-comp').files[0])   files.push('DVA: '      + document.getElementById('file-comp').files[0].name);
     if (document.getElementById('file-res').files[0])    files.push('Bookings: ' + document.getElementById('file-res').files[0].name);
-    if (document.getElementById('file-blk').files[0])    files.push('Blocks: '   + document.getElementById('file-blk').files[0].name);
     if (document.getElementById('file-folio').files[0])    files.push('Folio: '    + document.getElementById('file-folio').files[0].name);
     if (document.getElementById('file-arrivals').files[0]) files.push('Arrivals: ' + document.getElementById('file-arrivals').files[0].name);
     document.getElementById('m-files').value = files.join(' | ');
