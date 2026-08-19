@@ -662,6 +662,115 @@ def analyze_api_folio_variance(api_records, folio_df, adjustment_percent=0.0, to
     }
 
 
+def analyze_api_bookings_variance(api_records, res_df, tolerance=1.0):
+    """
+    Reservation-level reconciliation between a live OHIP reservations pull and
+    Duetto's own Bookings Report, joined on confirmation number — OHIP's
+    _confirmationNo (injected by _prep_reservation_for_display) against
+    Duetto's ALTERNATE_SOURCE_ID, the same join key already used and verified
+    for the Arrivals cross-reference (see cross_reference_arrivals).
+
+    Each side is one row per reservation here — if a reservation has multiple
+    room-stay lines this treats only the first/flattened one, same known
+    limitation as the rest of the reservations Browse Data view.
+    """
+    if res_df is None or not api_records:
+        return None
+
+    conf_col = next((c for c in res_df.columns if c.upper() == 'ALTERNATE_SOURCE_ID'), None) \
+        or next((c for c in res_df.columns if 'CONFIRM' in c.upper()), None)
+    if not conf_col:
+        return {'status': 'error', 'message': 'Bookings Report has no confirmation number column (ALTERNATE_SOURCE_ID) to join on.'}
+
+    rooms_col = next((c for c in res_df.columns if c.upper() in ('NUM_ROOMS', 'ROOMS')), None)
+    rate_col  = next((c for c in res_df.columns if c.upper() in ('RATE_AMOUNT', 'RATE', 'ADR')), None)
+    date_col  = next((c for c in res_df.columns if 'STAY_DATE' in c.upper() or c.upper() == 'DATE'), None)
+    status_col = next((c for c in res_df.columns if c.upper() in ('RESERVATION_STATUS', 'STATUS', 'SHORT_RESV_STATUS')), None)
+
+    duetto = res_df.copy()
+    duetto['_CONF']  = duetto[conf_col].astype(str).str.strip()
+    duetto['_ROOMS'] = pd.to_numeric(duetto[rooms_col], errors='coerce').fillna(0) if rooms_col else 1
+    duetto['_RATE']  = pd.to_numeric(duetto[rate_col], errors='coerce').fillna(0) if rate_col else 0.0
+    duetto['_DATE']  = pd.to_datetime(duetto[date_col], errors='coerce').dt.date if date_col else None
+    duetto['_STATUS'] = duetto[status_col].astype(str) if status_col else ''
+
+    duetto_grouped = duetto.groupby('_CONF').agg(
+        rooms=('_ROOMS', 'sum'), rate=('_RATE', 'first'),
+        stay_date=('_DATE', 'min'), status=('_STATUS', 'first'),
+    )
+
+    api_by_conf = {}
+    for r in api_records:
+        conf = str(r.get('_confirmationNo') or '').strip()
+        if not conf:
+            continue
+        rooms = r.get('roomStay.numberOfRooms')
+        try:
+            rooms = float(rooms) if rooms is not None else 0.0
+        except (ValueError, TypeError):
+            rooms = 0.0
+        rate = r.get('roomStay.rateAmount.amount')
+        try:
+            rate = float(rate) if rate is not None else 0.0
+        except (ValueError, TypeError):
+            rate = 0.0
+        api_by_conf[conf] = {
+            'rooms': api_by_conf.get(conf, {}).get('rooms', 0.0) + rooms,
+            'rate': rate,
+            'status': r.get('computedReservationStatus') or '',
+            'arrival_date': r.get('roomStay.arrivalDate') or '',
+        }
+
+    all_confs = set(api_by_conf) | set(duetto_grouped.index)
+    rows = []
+    matched_count = mismatch_count = api_only_count = duetto_only_count = 0
+
+    for conf in sorted(all_confs):
+        api_entry = api_by_conf.get(conf)
+        duetto_row = duetto_grouped.loc[conf] if conf in duetto_grouped.index else None
+
+        if api_entry and duetto_row is None:
+            rows.append({
+                'confirmation_no': conf, 'api_rooms': api_entry['rooms'], 'api_rate': round(api_entry['rate'], 2),
+                'api_status': api_entry['status'], 'duetto_rooms': None, 'duetto_rate': None,
+                'stay_date': api_entry['arrival_date'], 'status': 'api_only',
+            })
+            api_only_count += 1
+            continue
+        if duetto_row is not None and not api_entry:
+            rows.append({
+                'confirmation_no': conf, 'api_rooms': None, 'api_rate': None, 'api_status': None,
+                'duetto_rooms': float(duetto_row['rooms']), 'duetto_rate': round(float(duetto_row['rate']), 2),
+                'stay_date': str(duetto_row['stay_date']) if duetto_row['stay_date'] else '', 'status': 'duetto_only',
+            })
+            duetto_only_count += 1
+            continue
+
+        rooms_diff = api_entry['rooms'] - float(duetto_row['rooms'])
+        rate_diff  = api_entry['rate']  - float(duetto_row['rate'])
+        is_mismatch = abs(rooms_diff) > 0 or abs(rate_diff) > tolerance
+        rows.append({
+            'confirmation_no': conf,
+            'api_rooms': api_entry['rooms'], 'api_rate': round(api_entry['rate'], 2),
+            'duetto_rooms': float(duetto_row['rooms']), 'duetto_rate': round(float(duetto_row['rate']), 2),
+            'stay_date': str(duetto_row['stay_date']) if duetto_row['stay_date'] else api_entry['arrival_date'],
+            'status': 'mismatch' if is_mismatch else 'matched',
+        })
+        if is_mismatch:
+            mismatch_count += 1
+        else:
+            matched_count += 1
+
+    return {
+        'status': 'ok',
+        'matched_count': matched_count,
+        'mismatch_count': mismatch_count,
+        'api_only_count': api_only_count,
+        'duetto_only_count': duetto_only_count,
+        'rows': rows,
+    }
+
+
 def analyze_cashier_journal_variance(folio_df, journal_df, tolerance=1.0):
     """
     Transaction-level reconciliation between Duetto's Folio Report and the
@@ -1187,6 +1296,16 @@ OHIP_ENDPOINTS = {
         'single_page': True,
         'query': lambda hotel_id, start, end, ext_system, extra: {},
     },
+    'function_room_types': {
+        # Duetto's OHIP contact flagged that room types set up as meeting/function
+        # rooms (MEETINGROOM_YN = Y on the Room Types LOV) skew Hotel Stats —
+        # this call lists them directly so an analyst can cross-check.
+        'path': '/evm/config/v1/hotels/{hotel_id}/functionSpaces',
+        'response_paths': [],  # no example from Oracle yet — falls back to scanning the payload
+        'requires_ext_system': False,
+        'single_page': True,
+        'query': lambda hotel_id, start, end, ext_system, extra: {},
+    },
 }
 
 
@@ -1353,6 +1472,7 @@ DATA_TYPE_LABELS = {
     'restrictions': 'Restrictions',
     'rate_plan_schedules': 'Rate Plan Schedules',
     'opera_cloud_version': 'Opera Cloud Version',
+    'function_room_types': 'Function Room Types',
 }
 
 # ── Role catalog — UX-only separation, not a security boundary ──────────────
@@ -1414,6 +1534,75 @@ def run_readiness_check(hostname, access_token, app_key, enterprise_id, hotel_id
             entry['error'] = str(e)
         results.append(entry)
     return results
+
+
+# ── Hotel Stats (Revenue Inventory Statistics) ──────────────────────────────
+# Unlike every other OHIP call in this app, this is a 3-step ASYNC job:
+# POST to start it (202, job URL in the Location header), HEAD to poll status
+# until COMPLETED, then GET the same URL for the actual stats payload. Per
+# Duetto's OHIP integration notes (2026-08-18): known Oracle bug can return
+# incorrect rooms-sold/revenue even on Cloud 24.1.3.0 (TSQ-1037 / SR
+# 241008-001535), and room types flagged MEETINGROOM_YN=Y are excluded from
+# the numbers — both surfaced as warnings in the UI, not silently hidden.
+HOTEL_STATS_POLL_INTERVAL = 2
+HOTEL_STATS_POLL_TIMEOUT = 60
+
+
+def _hotel_stats_job_url(hostname, ext_system_code, hotel_id):
+    hostname = hostname if hostname.startswith('https://') else f'https://{hostname}'
+    hostname = hostname.rstrip('/')
+    return f'{hostname}/inv/async/v1/externalSystems/{ext_system_code}/hotels/{hotel_id.strip().upper()}/revenueInventoryStatistics'
+
+
+def start_hotel_stats_job(hostname, access_token, app_key, hotel_id, ext_system_code, start_date, end_date):
+    """POST to kick off the async job. Returns the job's poll/fetch URL from the Location header."""
+    url = _hotel_stats_job_url(hostname, ext_system_code, hotel_id)
+    body = json.dumps({'dateRangeStart': start_date, 'dateRangeEnd': end_date}).encode()
+    req = urllib.request.Request(url, data=body, method='POST')
+    req.add_header('Content-Type', 'application/json')
+    req.add_header('x-app-key', app_key.strip())
+    req.add_header('x-hotelId', hotel_id.strip().upper())
+    req.add_header('Authorization', f'Bearer {access_token}')
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        job_url = resp.headers.get('Location')
+    if not job_url:
+        raise ValueError('OHIP did not return a job Location header — cannot poll for the result.')
+    return job_url
+
+
+def poll_hotel_stats_job(job_url, access_token, app_key, hotel_id):
+    """HEAD the job URL until status=COMPLETED or HOTEL_STATS_POLL_TIMEOUT is hit."""
+    import time as _time
+    elapsed = 0
+    while elapsed < HOTEL_STATS_POLL_TIMEOUT:
+        req = urllib.request.Request(job_url, method='HEAD')
+        req.add_header('x-app-key', app_key.strip())
+        req.add_header('x-hotelId', hotel_id.strip().upper())
+        req.add_header('Authorization', f'Bearer {access_token}')
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            status = resp.headers.get('status') or resp.headers.get('Status')
+        if status and status.upper() == 'COMPLETED':
+            return
+        _time.sleep(HOTEL_STATS_POLL_INTERVAL)
+        elapsed += HOTEL_STATS_POLL_INTERVAL
+    raise TimeoutError(f'Hotel Stats job did not complete within {HOTEL_STATS_POLL_TIMEOUT}s.')
+
+
+def get_hotel_stats_result(job_url, access_token, app_key, hotel_id):
+    """GET the completed job's result payload."""
+    req = urllib.request.Request(job_url, method='GET')
+    req.add_header('x-app-key', app_key.strip())
+    req.add_header('x-hotelId', hotel_id.strip().upper())
+    req.add_header('Authorization', f'Bearer {access_token}')
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        return json.loads(resp.read().decode())
+
+
+def run_hotel_stats(hostname, access_token, app_key, hotel_id, ext_system_code, start_date, end_date):
+    """Orchestrates the full 3-step Hotel Stats job and returns the stats payload."""
+    job_url = start_hotel_stats_job(hostname, access_token, app_key, hotel_id, ext_system_code, start_date, end_date)
+    poll_hotel_stats_job(job_url, access_token, app_key, hotel_id)
+    return get_hotel_stats_result(job_url, access_token, app_key, hotel_id)
 
 
 def _prep_reservation_for_display(rec):
@@ -2011,7 +2200,8 @@ def classify_revenue(row, res_df, folio_analysis=None):
 
 def run_analysis(dva_raw, res_raw, folio_raw=None, arrivals_raw=None, arrivals_filename='',
                   arrivals_df=None, cashier_journal_raw=None, cashier_journal_filename='',
-                  api_folio_records=None, api_folio_adjustment_percent=0.0):
+                  api_folio_records=None, api_folio_adjustment_percent=0.0,
+                  api_bookings_records=None):
     """
     arrivals_df: pass a pre-built DataFrame (e.g. from a live Oracle OHIP fetch)
     to bypass file parsing entirely. Takes priority over arrivals_raw.
@@ -2048,6 +2238,22 @@ def run_analysis(dva_raw, res_raw, folio_raw=None, arrivals_raw=None, arrivals_f
             'status': 'error',
             'message': 'Upload a Folio Report as well — the live API pull is validated against it.',
         }
+
+    # Live OHIP API reservations pull vs. the Duetto Bookings Report —
+    # reservation-level reconciliation joined on confirmation number. Works
+    # regardless of whether a DVA was uploaded.
+    api_bookings_variance = None
+    if api_bookings_records and res_df is not None:
+        try:
+            api_bookings_variance = analyze_api_bookings_variance(api_bookings_records, res_df)
+        except Exception as e:
+            api_bookings_variance = {'status': 'error', 'message': str(e)}
+    elif api_bookings_records and res_df is None:
+        api_bookings_variance = {
+            'status': 'error',
+            'message': 'Upload a Bookings Report as well — the live API pull is validated against it.',
+        }
+
     if arrivals_df is None:
         arrivals_df = parse_arrival_details(arrivals_raw, arrivals_filename) if arrivals_raw else None
     if arrivals_df is not None:
@@ -2092,6 +2298,7 @@ def run_analysis(dva_raw, res_raw, folio_raw=None, arrivals_raw=None, arrivals_f
             'arrivals_xref':   {str(k): v for k, v in arrivals_xref.items()},
             'cashier_journal_variance': cashier_journal_variance,
             'api_folio_variance': api_folio_variance,
+            'api_bookings_variance': api_bookings_variance,
             'no_dva': True,
         }
 
@@ -2247,6 +2454,7 @@ def run_analysis(dva_raw, res_raw, folio_raw=None, arrivals_raw=None, arrivals_f
         'arrivals_xref':   {str(k): v for k, v in arrivals_xref.items()},
         'cashier_journal_variance': cashier_journal_variance,
         'api_folio_variance': api_folio_variance,
+        'api_bookings_variance': api_bookings_variance,
     }
 
 
@@ -2300,6 +2508,61 @@ def build_recommendations(code_counts):
 
 
 # ── Excel output ──────────────────────────────────────────────────────────────
+
+def build_readiness_excel(hotel_id: str, results: list) -> bytes:
+    """
+    One workbook, one sheet per Config Snapshot check — lets a deployment
+    engineer download all 6 checks in a single file instead of one at a time.
+    """
+    wb = Workbook()
+    wb.remove(wb.active)
+
+    header_fill = PatternFill('solid', fgColor='1F3864')
+    title_font  = Font(bold=True, color='FFFFFF', size=10)
+    bold_font   = Font(bold=True, size=10)
+    normal_font = Font(size=10)
+    center      = Alignment(horizontal='center', vertical='center', wrap_text=True)
+
+    for entry in results:
+        title = (entry.get('label') or entry.get('data_type') or 'Sheet')[:31]
+        # Sheet names must be unique and <=31 chars — dedupe defensively.
+        base_title, n = title, 1
+        while title in wb.sheetnames:
+            n += 1
+            suffix = f' ({n})'
+            title = base_title[:31 - len(suffix)] + suffix
+        ws = wb.create_sheet(title)
+
+        ws['A1'] = f"{entry.get('label', entry.get('data_type'))} — {hotel_id}"
+        ws['A1'].font = Font(bold=True, size=12, color='1F3864')
+
+        if entry.get('status') != 'ok':
+            ws['A3'] = f"Error: {entry.get('error', 'Unknown error')}"
+            ws['A3'].font = Font(color='9C0006', size=10)
+            continue
+
+        records = entry.get('records') or entry.get('preview') or []
+        columns = entry.get('all_columns') or (list(records[0].keys()) if records else [])
+
+        R = 3
+        for i, col in enumerate(columns, 1):
+            c = ws.cell(R, i, col)
+            c.fill = header_fill; c.font = title_font; c.alignment = center
+        R += 1
+        for row in records:
+            for i, col in enumerate(columns, 1):
+                val = row.get(col)
+                c = ws.cell(R, i, val if val is not None else '')
+                c.font = normal_font
+            R += 1
+
+        for i, col in enumerate(columns, 1):
+            ws.column_dimensions[get_column_letter(i)].width = max(12, min(30, len(str(col)) + 4))
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
 
 def build_excel(result: dict) -> bytes:
     wb = Workbook()
@@ -2695,12 +2958,14 @@ def analyze():
     arrivals_file = request.files.get('arrivals')
     cashier_journal_file = request.files.get('cashier_journal')
     api_folio_records_file = request.files.get('api_folio_records')
+    api_bookings_records_file = request.files.get('api_bookings_records')
 
     # Every file is optional now — but at least one is needed to have anything
     # to analyze. A DVA unlocks the full accuracy/discrepancy engine; without
     # one, run_analysis() falls back to whatever cross-file comparison the
     # uploaded combination actually supports (e.g. Bookings vs. Arrivals).
-    if not any([dva_file, res_file, folio_file, arrivals_file, cashier_journal_file, api_folio_records_file]):
+    if not any([dva_file, res_file, folio_file, arrivals_file, cashier_journal_file,
+                api_folio_records_file, api_bookings_records_file]):
         return jsonify({'error': 'Upload at least one file to analyze.'}), 400
 
     try:
@@ -2721,12 +2986,14 @@ def analyze():
             api_folio_adjustment_percent = float(request.form.get('api_folio_adjustment_percent') or 0)
         except (ValueError, TypeError):
             api_folio_adjustment_percent = 0.0
+        api_bookings_records = json.loads(api_bookings_records_file.read()) if api_bookings_records_file else None
 
         result     = run_analysis(dva_raw, res_raw, folio_raw, arrivals_raw, arrivals_filename,
                                    cashier_journal_raw=cashier_journal_raw,
                                    cashier_journal_filename=cashier_journal_filename,
                                    api_folio_records=api_folio_records,
-                                   api_folio_adjustment_percent=api_folio_adjustment_percent)
+                                   api_folio_adjustment_percent=api_folio_adjustment_percent,
+                                   api_bookings_records=api_bookings_records)
 
         if result.get('no_dva'):
             result['xlsx_b64'] = None
@@ -2977,6 +3244,98 @@ def readiness_check():
             print(f"[oracle creds] failed to save: {e}")
 
     return jsonify({'hotel_id': hotel_id, 'check_id': check_id, 'results': results})
+
+
+@app.route('/readiness_check/export', methods=['POST'])
+def readiness_check_export():
+    """
+    Bundles all 6 Config Snapshot checks (already fetched by the browser) into
+    one downloadable workbook instead of downloading each card separately.
+    """
+    body = dict(request.get_json(force=True) or {})
+    hotel_id = body.get('hotel_id') or ''
+    results = body.get('results') or []
+    if not results:
+        return jsonify({'error': 'No results to export — run a Config Snapshot first.'}), 400
+    xlsx_bytes = build_readiness_excel(hotel_id, results)
+    return jsonify({'xlsx_b64': base64.b64encode(xlsx_bytes).decode()})
+
+
+@app.route('/hotel_stats', methods=['POST'])
+def hotel_stats():
+    """
+    Hotel Stats (Revenue Inventory Statistics) — a 3-step async OHIP job
+    (POST to start, HEAD to poll, GET to fetch), unlike every other single-call
+    pull in this app. Also pulls Function Room Types alongside it, since room
+    types configured as meeting/function rooms are excluded from the stats and
+    an analyst needs to know that to interpret the numbers correctly.
+    """
+    body = dict(request.get_json(force=True) or {})
+    hotel_id = (body.get('hotel_id') or '').strip()
+    environment = body.get('environment') or 'prod'
+    ext_system_code = body.get('ext_system_code') or 'DUETTO1'
+
+    if hotel_id and not body.get('client_secret'):
+        saved = get_oracle_credentials(hotel_id, environment)
+        if saved:
+            for k in ('hostname', 'client_id', 'client_secret', 'app_key', 'enterprise_id'):
+                if not body.get(k):
+                    body[k] = saved.get(k, '')
+
+    required = ['hostname', 'client_id', 'client_secret', 'app_key', 'hotel_id', 'start_date', 'end_date']
+    missing = [f for f in required if not body.get(f)]
+    if missing:
+        return jsonify({'error': f'Missing required field(s): {", ".join(missing)}'}), 400
+
+    token, err = get_oracle_oauth_token(
+        body['hostname'], body['client_id'], body['client_secret'], body['app_key'],
+        enterprise_id=body.get('enterprise_id'), auth_type=body.get('auth_type', 'ocim'),
+        username=body.get('username'), password=body.get('password'),
+    )
+    if not token:
+        return jsonify({'error': f'OAuth error: {err}'}), 400
+
+    try:
+        stats = run_hotel_stats(
+            body['hostname'], token, body['app_key'], hotel_id, ext_system_code,
+            body['start_date'], body['end_date'],
+        )
+    except Exception as e:
+        return jsonify({'error': f'Hotel Stats fetch failed: {e}'}), 502
+
+    function_rooms = []
+    function_rooms_error = None
+    try:
+        raw_function_rooms = fetch_oracle_raw(
+            'function_room_types', body['hostname'], token, body['app_key'],
+            body.get('enterprise_id'), hotel_id,
+        )
+        function_rooms, _, _ = format_records_for_display('function_room_types', raw_function_rooms)
+    except Exception as e:
+        function_rooms_error = str(e)
+
+    if hotel_id:
+        try:
+            save_oracle_credentials(
+                hotel_id, body['hostname'], body['client_id'], body['client_secret'],
+                body['app_key'], body.get('enterprise_id', ''), environment=environment
+            )
+        except Exception as e:
+            print(f"[oracle creds] failed to save: {e}")
+
+    return jsonify({
+        'hotel_id': hotel_id,
+        'stats': stats,
+        'function_rooms': function_rooms,
+        'function_rooms_error': function_rooms_error,
+        'warnings': [
+            'Known Oracle issue (TSQ-1037 / SR 241008-001535): OHIP can return incorrect rooms-sold or '
+            'revenue figures even on Cloud 24.1.3.0 — cross-check against the H&F report if these numbers look off.',
+            'Room types flagged as meeting/function rooms (MEETINGROOM_YN = Y) are excluded from these stats. '
+            'See Function Room Types below for what’s configured as a function space at this hotel.',
+            'The OHIP API cannot break these numbers out by individual vs. group reservations.',
+        ],
+    })
 
 
 @app.route('/readiness_checks/<hotel_id>', methods=['GET'])

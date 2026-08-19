@@ -1017,7 +1017,7 @@
       <label>Start Date
         <input type="date" id="browse-start-date"/>
       </label>
-      <label>End Date
+      <label>End Date <span style="font-weight:400;color:var(--muted)">(inclusive)</span>
         <input type="date" id="browse-end-date"/>
       </label>
     </div>
@@ -1030,6 +1030,7 @@
     </div>
     <div id="browse-progress-row" style="display:none;margin-top:10px;font-size:.78rem;color:var(--muted)"></div>
     <div id="browse-folio-pull-note" style="display:none;margin-top:10px;font-size:.78rem;color:var(--muted)"></div>
+    <div id="browse-bookings-pull-note" style="display:none;margin-top:10px;font-size:.78rem;color:var(--muted)"></div>
 
     <div id="browse-results" style="display:none;margin-top:20px">
       <div class="section-label">
@@ -1067,7 +1068,13 @@
       <div class="action-card-lock-note" id="readiness-lock-note">Validate your credentials above to unlock this.</div>
     </div>
 
-    <div class="oracle-actions">
+    <div class="browse-conn-grid">
+      <label>External System Code <span style="font-weight:400;color:var(--muted)">(Rate Plans check only — default DUETTO1)</span>
+        <input type="text" id="readiness-ext-system" placeholder="DUETTO1"/>
+      </label>
+    </div>
+
+    <div class="oracle-actions" style="margin-top:12px">
       <button type="button" class="run-btn" id="readiness-run-btn" style="width:auto;margin:0;padding:10px 24px">
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 2.5l10 5.5-10 5.5V2.5z" fill="currentColor"/></svg>
         Run Config Snapshot
@@ -1077,6 +1084,37 @@
 
     <div id="readiness-results" style="display:none;margin-top:20px"></div>
   </div><!-- /mode-readiness -->
+
+  <!-- ── Action: Hotel Stats (Revenue Inventory Statistics) ── -->
+  <div class="action-card locked" id="mode-hotel-stats">
+    <div class="action-card-hdr">
+      <h2>📊 Hotel Stats</h2>
+      <p>Total physical/out-of-order rooms, rooms sold, room revenue, arrivals/departures/cancellations, and total revenue for a date range. Runs as a 3-step async OHIP job, so it can take longer than the other pulls.</p>
+      <div class="action-card-lock-note" id="hotel-stats-lock-note">Validate your credentials above to unlock this.</div>
+    </div>
+
+    <div class="browse-conn-grid">
+      <label>External System Code <span style="font-weight:400;color:var(--muted)">(default DUETTO1)</span>
+        <input type="text" id="hotel-stats-ext-system" placeholder="DUETTO1"/>
+      </label>
+      <label>Start Date <span style="font-weight:400;color:var(--muted)">(inclusive)</span>
+        <input type="date" id="hotel-stats-start-date"/>
+      </label>
+      <label>End Date <span style="font-weight:400;color:var(--muted)">(inclusive)</span>
+        <input type="date" id="hotel-stats-end-date"/>
+      </label>
+    </div>
+
+    <div class="oracle-actions" style="margin-top:12px">
+      <button type="button" class="run-btn" id="hotel-stats-run-btn" style="width:auto;margin:0;padding:10px 24px">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 2.5l10 5.5-10 5.5V2.5z" fill="currentColor"/></svg>
+        Run Hotel Stats
+      </button>
+    </div>
+    <div id="hotel-stats-status" style="margin-top:10px;font-size:.78rem;color:var(--muted)"></div>
+
+    <div id="hotel-stats-results" style="display:none;margin-top:20px"></div>
+  </div><!-- /mode-hotel-stats -->
 
 
   <!-- ── Action: Upload DVA & Compare (works with or without validated credentials) ── -->
@@ -1155,13 +1193,37 @@
                    style="width:100%;margin-top:2px;padding:6px 8px;font-size:.8rem;border:1px solid var(--border-mid);border-radius:6px"/>
           </label>
           <div id="api-folio-pull-controls" style="display:flex;gap:6px;margin-top:6px">
-            <input type="date" id="api-folio-pull-start" style="flex:1;padding:6px 8px;font-size:.78rem;border:1px solid var(--border-mid);border-radius:6px"/>
-            <input type="date" id="api-folio-pull-end" style="flex:1;padding:6px 8px;font-size:.78rem;border:1px solid var(--border-mid);border-radius:6px"/>
+            <input type="date" id="api-folio-pull-start" title="Start date (inclusive)" style="flex:1;padding:6px 8px;font-size:.78rem;border:1px solid var(--border-mid);border-radius:6px"/>
+            <input type="date" id="api-folio-pull-end" title="End date (inclusive)" style="flex:1;padding:6px 8px;font-size:.78rem;border:1px solid var(--border-mid);border-radius:6px"/>
           </div>
+          <div style="font-size:.68rem;color:var(--muted);margin-top:3px">Both dates inclusive</div>
           <button type="button" class="oracle-test-btn" id="api-folio-pull-btn" style="width:100%;margin-top:6px;background:transparent;color:var(--duetto-dark);border:1px solid var(--border-mid)">
             Pull Live Data Now
           </button>
           <button type="button" class="oracle-test-btn" id="api-folio-pull-clear-btn" style="width:100%;margin-top:6px;display:none;background:transparent;color:#9B1C2E;border:1px solid var(--border-mid)">
+            Clear Pulled Data
+          </button>
+        </div>
+      </div>
+
+      <div class="drop-zone" id="zone-api-bookings-pull" style="cursor:default">
+        <span class="dz-optional">Optional</span>
+        <span class="dz-icon">📡</span>
+        <span class="dz-label">Live API Bookings Pull</span>
+        <span class="dz-hint">Pulled directly from OHIP — not a file</span>
+        <span class="dz-unlocks">Unlocks: API vs. Duetto Bookings Report reconciliation by confirmation #, side-by-side (requires Bookings Report above)</span>
+        <div class="dz-filename" id="api-bookings-pull-status"></div>
+
+        <div style="margin-top:10px;text-align:left;width:100%">
+          <div id="api-bookings-pull-controls" style="display:flex;gap:6px;margin-top:6px">
+            <input type="date" id="api-bookings-pull-start" title="Start date (inclusive)" style="flex:1;padding:6px 8px;font-size:.78rem;border:1px solid var(--border-mid);border-radius:6px"/>
+            <input type="date" id="api-bookings-pull-end" title="End date (inclusive)" style="flex:1;padding:6px 8px;font-size:.78rem;border:1px solid var(--border-mid);border-radius:6px"/>
+          </div>
+          <div style="font-size:.68rem;color:var(--muted);margin-top:3px">Both dates inclusive — arrival date range</div>
+          <button type="button" class="oracle-test-btn" id="api-bookings-pull-btn" style="width:100%;margin-top:6px;background:transparent;color:var(--duetto-dark);border:1px solid var(--border-mid)">
+            Pull Live Data Now
+          </button>
+          <button type="button" class="oracle-test-btn" id="api-bookings-pull-clear-btn" style="width:100%;margin-top:6px;display:none;background:transparent;color:#9B1C2E;border:1px solid var(--border-mid)">
             Clear Pulled Data
           </button>
         </div>
@@ -1207,6 +1269,7 @@
       <button class="result-tab" data-tab="tab-reconciliation" id="tab-btn-recon" style="display:none">Reconciliation</button>
       <button class="result-tab" data-tab="tab-cashier-journal" id="tab-btn-cashier-journal" style="display:none">Folio Variance <span class="result-tab-badge" id="tab-badge-cashier-journal"></span></button>
       <button class="result-tab" data-tab="tab-api-folio" id="tab-btn-api-folio" style="display:none">API Folio Comparison <span class="result-tab-badge" id="tab-badge-api-folio"></span></button>
+      <button class="result-tab" data-tab="tab-api-bookings" id="tab-btn-api-bookings" style="display:none">API Bookings Comparison <span class="result-tab-badge" id="tab-badge-api-bookings"></span></button>
       <button class="result-tab" data-tab="tab-recommendations" id="tab-btn-recs">Recommendations</button>
     </div>
 
@@ -1303,6 +1366,11 @@
     <!-- ── API Folio Comparison tab (shown only when a live API pull was attached) ── -->
     <div class="result-tab-panel" id="tab-api-folio" style="display:none">
       <div id="api-folio-content"></div>
+    </div>
+
+    <!-- ── API Bookings Comparison tab (shown only when a live API pull was attached) ── -->
+    <div class="result-tab-panel" id="tab-api-bookings" style="display:none">
+      <div id="api-bookings-content"></div>
     </div>
 
     <!-- ── Recommendations tab ── -->
@@ -1507,11 +1575,12 @@
 
   function setLockedState(validated) {
     credentialsValidated = validated;
-    ['mode-browse', 'mode-readiness'].forEach(id => {
+    ['mode-browse', 'mode-readiness', 'mode-hotel-stats'].forEach(id => {
       document.getElementById(id).classList.toggle('locked', !validated);
     });
     document.getElementById('browse-lock-note').style.display = validated ? 'none' : 'block';
     document.getElementById('readiness-lock-note').style.display = validated ? 'none' : 'block';
+    document.getElementById('hotel-stats-lock-note').style.display = validated ? 'none' : 'block';
   }
 
   function setCredStatus(state, detail) {
@@ -1679,6 +1748,7 @@
   // ══════════════ Pull Deployment Info / Config Snapshot (uses shared credentials) ══════════════
   document.getElementById('readiness-run-btn').addEventListener('click', async () => {
     const payload = getSharedCredentials();
+    payload.ext_system_code = document.getElementById('readiness-ext-system').value.trim() || 'DUETTO1';
     const required = ['hostname', 'hotel_id', 'app_key', 'client_id'];
     const missing = required.filter(k => !payload[k]);
     if (missing.length) { alert('Missing required field(s): ' + missing.join(', ')); return; }
@@ -1710,6 +1780,112 @@
       alert('Fetch error: ' + e.message);
     }
   });
+
+  // ══════════════ Hotel Stats (Revenue Inventory Statistics) ══════════════
+  document.getElementById('hotel-stats-run-btn').addEventListener('click', async () => {
+    const payload = getSharedCredentials();
+    payload.ext_system_code = document.getElementById('hotel-stats-ext-system').value.trim() || 'DUETTO1';
+    payload.start_date = document.getElementById('hotel-stats-start-date').value;
+    payload.end_date = document.getElementById('hotel-stats-end-date').value;
+    const required = ['hostname', 'hotel_id', 'app_key', 'client_id', 'start_date', 'end_date'];
+    const missing = required.filter(k => !payload[k]);
+    if (missing.length) {
+      alert(missing.includes('start_date') || missing.includes('end_date')
+        ? 'Select a start and end date before running Hotel Stats.'
+        : 'Missing required field(s): ' + missing.join(', '));
+      return;
+    }
+
+    const btn = document.getElementById('hotel-stats-run-btn');
+    const statusEl = document.getElementById('hotel-stats-status');
+    btn.disabled = true;
+    statusEl.textContent = 'Running — this is an async job and can take up to a minute…';
+    document.getElementById('hotel-stats-results').style.display = 'none';
+
+    try {
+      const resp = await fetch('/hotel_stats', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await resp.json();
+      btn.disabled = false;
+      if (data.error) {
+        statusEl.textContent = '';
+        alert('Error: ' + data.error);
+        return;
+      }
+      statusEl.textContent = `Checked ${escHtml(payload.hotel_id)} just now.`;
+      renderHotelStatsResults(data);
+    } catch (e) {
+      btn.disabled = false;
+      statusEl.textContent = '';
+      alert('Fetch error: ' + e.message);
+    }
+  });
+
+  function renderHotelStatsResults(data) {
+    const container = document.getElementById('hotel-stats-results');
+    container.style.display = 'block';
+
+    const warningsHtml = (data.warnings || []).map(w =>
+      `<p style="background:#fffbeb;border:1px solid #fcd34d;color:#92400e;border-radius:6px;padding:8px 12px;font-size:.78rem;margin:0 0 8px">⚠ ${escHtml(w)}</p>`
+    ).join('');
+
+    // Confirmed live shape: {"revInvStats": [{occupancyDate, physicalRooms,
+    // ooRooms, roomsSold, roomRevenue, roomArrivals, roomDepartures,
+    // cancelledRooms, totalRevenue, ...}, ...]} — one row per day.
+    const stats = data.stats || {};
+    const dailyRows = stats.revInvStats || [];
+    _hotelStatsRows = dailyRows;
+    let statsHtml;
+    if (dailyRows.length) {
+      const preferredOrder = ['occupancyDate', 'physicalRooms', 'ooRooms', 'roomsSold', 'roomArrivals',
+        'roomDepartures', 'cancelledRooms', 'noShowRooms', 'roomRevenue', 'foodRevenue', 'totalRevenue'];
+      const allCols = Array.from(new Set(dailyRows.flatMap(r => Object.keys(r))));
+      const cols = [...preferredOrder.filter(c => allCols.includes(c)), ...allCols.filter(c => !preferredOrder.includes(c))];
+      statsHtml = `<div class="table-outer"><div class="table-scroll readiness-table-scroll-capped">
+        <table class="readiness-preview-table"><thead><tr>${cols.map(c => `<th>${escHtml(humanizeFullPath(c))}</th>`).join('')}</tr></thead>
+        <tbody>${dailyRows.map(row => `<tr>${cols.map(c => `<td>${escHtml(row[c] != null ? String(row[c]) : '')}</td>`).join('')}</tr>`).join('')}</tbody></table>
+      </div></div>`;
+    } else {
+      statsHtml = `<div class="table-outer"><div class="table-scroll table-scroll-capped"><pre style="font-size:.78rem;padding:12px;margin:0;white-space:pre-wrap">${escHtml(JSON.stringify(stats, null, 2))}</pre></div></div>`;
+    }
+
+    const functionRooms = data.function_rooms || [];
+    let functionRoomsHtml;
+    if (data.function_rooms_error) {
+      functionRoomsHtml = `<p style="color:#9B1C2E;font-size:.82rem">Could not fetch Function Room Types: ${escHtml(data.function_rooms_error)}</p>`;
+    } else if (!functionRooms.length) {
+      functionRoomsHtml = `<p style="color:var(--muted);font-size:.82rem">No function/meeting room types configured at this hotel.</p>`;
+    } else {
+      const cols = Object.keys(functionRooms[0]);
+      functionRoomsHtml = `<div class="table-outer"><div class="table-scroll readiness-table-scroll-capped">
+        <table class="readiness-preview-table"><thead><tr>${cols.map(c => `<th>${escHtml(c)}</th>`).join('')}</tr></thead>
+        <tbody>${functionRooms.map(row => `<tr>${cols.map(c => `<td>${escHtml(row[c] != null ? String(row[c]) : '')}</td>`).join('')}</tr>`).join('')}</tbody></table>
+      </div></div>`;
+    }
+
+    container.innerHTML = `
+      ${warningsHtml}
+      <div class="disc-search-row" style="justify-content:space-between">
+        <div class="section-label" style="margin:0">Revenue Inventory Statistics</div>
+        <div style="display:flex;gap:8px">
+          <button type="button" class="oracle-test-btn" onclick="downloadHotelStatsExport(',', 'csv', 'text/csv')" style="background:transparent;color:var(--duetto-dark);border:1px solid var(--border-mid)">Download CSV</button>
+          <button type="button" class="oracle-test-btn" onclick="downloadHotelStatsExport('\\t', 'tsv', 'text/tab-separated-values')" style="background:transparent;color:var(--duetto-dark);border:1px solid var(--border-mid)">Download TSV</button>
+        </div>
+      </div>
+      ${statsHtml}
+      <div class="section-label" style="margin-top:20px">Function Room Types <span style="font-weight:400;color:var(--muted);text-transform:none;letter-spacing:0">(excluded from stats above)</span></div>
+      ${functionRoomsHtml}
+    `;
+  }
+
+  let _hotelStatsRows = [];
+  function downloadHotelStatsExport(delim, ext, mime) {
+    const cols = _hotelStatsRows.length ? Object.keys(_hotelStatsRows[0]) : [];
+    downloadDelimited(_hotelStatsRows, cols, 'dqe_hotel_stats', delim, ext, mime);
+  }
 
   let _readinessResults = [];
   let _readinessHotelId = '';
@@ -1747,7 +1923,11 @@
     _readinessHotelId = hotelId || '';
     const container = document.getElementById('readiness-results');
     container.style.display = 'block';
-    container.innerHTML = results.map((r, idx) => {
+    const downloadAllBar = `
+      <div style="display:flex;justify-content:flex-end;margin-bottom:12px">
+        <button type="button" class="oracle-test-btn" id="readiness-download-all-btn" style="background:transparent;color:var(--duetto-dark);border:1px solid var(--border-mid)">⬇ Download All (Excel, one file)</button>
+      </div>`;
+    container.innerHTML = downloadAllBar + results.map((r, idx) => {
       const badge = r.status === 'ok'
         ? `<span class="readiness-badge ok">${r.count} record${r.count !== 1 ? 's' : ''}</span>`
         : `<span class="readiness-badge error">Error</span>`;
@@ -1800,6 +1980,36 @@
         ${body}
       </div>`;
     }).join('');
+
+    document.getElementById('readiness-download-all-btn').addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
+      btn.disabled = true;
+      const original = btn.textContent;
+      btn.textContent = '⏳ Building workbook…';
+      try {
+        const resp = await fetch('/readiness_check/export', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ hotel_id: _readinessHotelId, results: _readinessResults }),
+        });
+        const data = await resp.json();
+        if (data.error) { alert('Error: ' + data.error); return; }
+        const blob = b64ToBlob(data.xlsx_b64, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `dqe_config_snapshot_${_readinessHotelId}_${new Date().toISOString().slice(0,10)}.xlsx`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      } catch (err) {
+        alert('Export error: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = original;
+      }
+    });
   }
 
   function browsePollProgress(progressId, rowEl) {
@@ -1862,6 +2072,11 @@
         document.getElementById('browse-folio-pull-note').style.display = 'block';
         document.getElementById('browse-folio-pull-note').textContent =
           `✓ ${(data.records || []).length} folio record(s) cached — usable for API Folio Comparison in Upload DVA & Compare below.`;
+      } else if (dataType === 'reservations') {
+        setLastBookingsPull(data.records || [], startDate, endDate);
+        document.getElementById('browse-bookings-pull-note').style.display = 'block';
+        document.getElementById('browse-bookings-pull-note').textContent =
+          `✓ ${(data.records || []).length} reservation(s) cached — usable for API Bookings Comparison in Upload DVA & Compare below.`;
       }
     } catch (e) {
       clearInterval(pollHandle);
@@ -2049,6 +2264,64 @@
     }
   });
 
+  // ══════════════ Live API Bookings Pull tile (Upload DVA & Compare) ══════════════
+  // Mirrors the Folio Pull tile above, but joins on confirmation number
+  // against the Duetto Bookings Report instead of day+code buckets.
+  let _lastBookingsPull = null; // { records, start, end }
+
+  function setLastBookingsPull(records, start, end) {
+    _lastBookingsPull = { records, start, end };
+    const statusEl = document.getElementById('api-bookings-pull-status');
+    statusEl.textContent = `✓ ${records.length} record(s) — ${start} to ${end}`;
+    statusEl.className = 'dz-filename valid';
+    document.getElementById('zone-api-bookings-pull').classList.add('has-file');
+    document.getElementById('api-bookings-pull-clear-btn').style.display = 'block';
+    checkReady();
+  }
+
+  document.getElementById('api-bookings-pull-clear-btn').addEventListener('click', () => {
+    _lastBookingsPull = null;
+    document.getElementById('api-bookings-pull-status').textContent = '';
+    document.getElementById('api-bookings-pull-status').className = 'dz-filename';
+    document.getElementById('zone-api-bookings-pull').classList.remove('has-file');
+    document.getElementById('api-bookings-pull-clear-btn').style.display = 'none';
+    document.getElementById('browse-bookings-pull-note').style.display = 'none';
+    checkReady();
+  });
+
+  document.getElementById('api-bookings-pull-btn').addEventListener('click', async () => {
+    const creds = getSharedCredentials();
+    const startDate = document.getElementById('api-bookings-pull-start').value;
+    const endDate = document.getElementById('api-bookings-pull-end').value;
+    const required = { ...creds, start_date: startDate, end_date: endDate };
+    const missing = ['hostname', 'hotel_id', 'app_key', 'client_id', 'start_date', 'end_date'].filter(k => !required[k]);
+    if (missing.length) {
+      alert(missing.includes('start_date') || missing.includes('end_date')
+        ? 'Select a start and end date to pull.'
+        : 'Missing required field(s): ' + missing.join(', '));
+      return;
+    }
+    const btn = document.getElementById('api-bookings-pull-btn');
+    btn.disabled = true;
+    btn.textContent = '⏳ Pulling…';
+    try {
+      const resp = await fetch('/browse_oracle', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...creds, data_type: 'reservations', start_date: startDate, end_date: endDate }),
+      });
+      const data = await resp.json();
+      btn.disabled = false;
+      btn.textContent = 'Pull Live Data Now';
+      if (data.error) { alert('Error: ' + data.error); return; }
+      setLastBookingsPull(data.records || [], startDate, endDate);
+    } catch (e) {
+      btn.disabled = false;
+      btn.textContent = 'Pull Live Data Now';
+      alert('Fetch error: ' + e.message);
+    }
+  });
+
   // File zones — every file is optional; Run Analysis enables as soon as any one is present.
   const zones = [
     { zone: 'zone-comp',  input: 'file-comp',  label: 'name-comp',  required: false },
@@ -2121,7 +2394,7 @@
   // Run Analysis enables as soon as ANY file is present (or a live API pull is attached).
   function checkReady() {
     const anyFile = zones.some(({ input }) => document.getElementById(input).files[0]);
-    document.getElementById('run-btn').disabled = !(anyFile || _lastFolioPull);
+    document.getElementById('run-btn').disabled = !(anyFile || _lastFolioPull || _lastBookingsPull);
   }
   checkReady();
 
@@ -2150,6 +2423,10 @@
       const blob = new Blob([JSON.stringify(_lastFolioPull.records)], { type: 'application/json' });
       fd.append('api_folio_records', blob, 'api_folio_records.json');
       fd.append('api_folio_adjustment_percent', document.getElementById('api-folio-adjustment-percent').value || '0');
+    }
+    if (_lastBookingsPull) {
+      const bookingsBlob = new Blob([JSON.stringify(_lastBookingsPull.records)], { type: 'application/json' });
+      fd.append('api_bookings_records', bookingsBlob, 'api_bookings_records.json');
     }
 
     const webhookUrl = document.getElementById('webhook-url').value.trim();
@@ -2355,6 +2632,9 @@
 
     // API Folio Comparison tab only appears when a live API pull was attached
     renderApiFolioVariance(data.api_folio_variance);
+
+    // API Bookings Comparison tab only appears when a live API pull was attached
+    renderApiBookingsVariance(data.api_bookings_variance);
 
     // Discrepancy count badge on the tab
     const discBadge = document.getElementById('tab-badge-disc');
@@ -2617,6 +2897,78 @@
   const API_FOLIO_EXPORT_COLUMNS = ['stay_date', 'transaction_code', 'api_gross_amount', 'api_adjusted_amount', 'duetto_amount', 'diff', 'status'];
   function downloadApiFolioExport(delim, ext, mime) {
     downloadDelimited(_apiFolioRows, API_FOLIO_EXPORT_COLUMNS, 'dqe_api_folio_comparison', delim, ext, mime);
+  }
+
+  function renderApiBookingsVariance(v) {
+    const tabBtn = document.getElementById('tab-btn-api-bookings');
+    const badge = document.getElementById('tab-badge-api-bookings');
+    const content = document.getElementById('api-bookings-content');
+
+    if (!v) {
+      tabBtn.style.display = 'none';
+      return;
+    }
+    tabBtn.style.display = 'inline-block';
+
+    if (v.status === 'error') {
+      badge.textContent = '';
+      content.innerHTML = `<p style="color:#9B1C2E">${escHtml(v.message || 'Could not compare the live API bookings pull.')}</p>`;
+      return;
+    }
+
+    const issueCount = v.mismatch_count + v.api_only_count + v.duetto_only_count;
+    badge.textContent = issueCount ? issueCount : '';
+
+    const STATUS_LABEL = {
+      matched:     '<span class="badge match">✓ Match</span>',
+      mismatch:    '<span class="badge over">⚠ Mismatch</span>',
+      api_only:    '<span class="badge under">API Only</span>',
+      duetto_only: '<span class="badge under">Duetto Only</span>',
+    };
+
+    const rows = v.rows || [];
+    _apiBookingsRows = rows;
+    const rowsHtml = !rows.length
+      ? `<p style="color:var(--muted);font-size:.82rem">No reservations found on either side.</p>`
+      : `<div class="table-outer"><div class="table-scroll table-scroll-capped">
+        <table class="rule-codes-table">
+          <thead><tr>
+            <th>Confirmation #</th><th>Stay Date</th><th>API Rooms</th><th>API Rate</th><th>Duetto Rooms</th><th>Duetto Rate</th><th>Status</th>
+          </tr></thead>
+          <tbody>${rows.map(r => `<tr>
+            <td>${escHtml(r.confirmation_no)}</td>
+            <td>${escHtml(r.stay_date)}</td>
+            <td>${r.api_rooms != null ? r.api_rooms : '—'}</td>
+            <td>${r.api_rate != null ? fmt(r.api_rate) : '—'}</td>
+            <td>${r.duetto_rooms != null ? r.duetto_rooms : '—'}</td>
+            <td>${r.duetto_rate != null ? fmt(r.duetto_rate) : '—'}</td>
+            <td>${STATUS_LABEL[r.status] || r.status}</td>
+          </tr>`).join('')}</tbody>
+        </table>
+      </div></div>`;
+
+    content.innerHTML = `
+      <div class="section-label">API Bookings Pull vs. Duetto Bookings Report <span style="font-weight:400;color:var(--muted);text-transform:none;letter-spacing:0">(joined by confirmation #)</span></div>
+      <div class="accuracy-row">
+        <div class="acc-card"><div class="acc-icon">✓</div><div><div class="acc-label">Matched Reservations</div><div class="acc-value">${v.matched_count}</div></div></div>
+        <div class="acc-card"><div class="acc-icon">⚠</div><div><div class="acc-label">Rooms/Rate Mismatches</div><div class="acc-value">${v.mismatch_count}</div></div></div>
+        <div class="acc-card"><div class="acc-icon">❓</div><div><div class="acc-label">Missing Somewhere</div><div class="acc-value">${v.api_only_count + v.duetto_only_count}</div></div></div>
+      </div>
+      <div class="disc-search-row" style="justify-content:space-between;margin-top:20px">
+        <div class="section-label" style="margin:0">Side-by-Side by Confirmation # <span style="font-weight:400;color:var(--muted);text-transform:none;letter-spacing:0">(${rows.length} — includes matches)</span></div>
+        <div style="display:flex;gap:8px">
+          <button type="button" class="oracle-test-btn" onclick="downloadApiBookingsExport(',', 'csv', 'text/csv')" style="background:transparent;color:var(--duetto-dark);border:1px solid var(--border-mid)">Download CSV</button>
+          <button type="button" class="oracle-test-btn" onclick="downloadApiBookingsExport('\\t', 'tsv', 'text/tab-separated-values')" style="background:transparent;color:var(--duetto-dark);border:1px solid var(--border-mid)">Download TSV</button>
+        </div>
+      </div>
+      ${rowsHtml}
+    `;
+  }
+
+  let _apiBookingsRows = [];
+  const API_BOOKINGS_EXPORT_COLUMNS = ['confirmation_no', 'stay_date', 'api_rooms', 'api_rate', 'duetto_rooms', 'duetto_rate', 'status'];
+  function downloadApiBookingsExport(delim, ext, mime) {
+    downloadDelimited(_apiBookingsRows, API_BOOKINGS_EXPORT_COLUMNS, 'dqe_api_bookings_comparison', delim, ext, mime);
   }
 
   function formatFolio(s) {
