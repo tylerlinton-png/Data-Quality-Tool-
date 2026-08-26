@@ -6,6 +6,7 @@ import datetime
 import uuid
 import sqlite3
 import os
+import threading
 import urllib.request
 import urllib.parse
 import urllib.error
@@ -3456,6 +3457,75 @@ def monday_graphql(query: str, variables: dict = None):
         return json.loads(resp.read())
 
 
+# ── Usage tracking (DQE Usage board) ────────────────────────────────────────
+# Answers two questions leadership asked for: is Deployment/Migrations
+# actually using the app, and which feature gets used most. Team is
+# self-selected by the user in the "Who are you?" picker rather than inferred
+# from Monday team membership — simpler, and correct for people (e.g. Tyler)
+# who use the app but aren't formally on one of these three Monday teams.
+MONDAY_USAGE_BOARD_ID = '18428316238'
+MONDAY_USAGE_COLS = {
+    'team':      'color_mm6kddf8',
+    'action':    'color_mm6k248e',
+    'hotel_id':  'text_mm6kv8t',
+    'timestamp': 'date_mm6kejk6',
+}
+MONDAY_USAGE_TEAMS = {'DQE', 'Deployment', 'Migrations', 'Other'}
+
+
+def _post_usage_event(team_label, action, hotel_id):
+    """Runs on a background thread — the actual Monday API call, so a slow or
+    unreachable Monday never holds a request/worker open (see log_usage)."""
+    now_iso = datetime.date.today().isoformat()
+    col_values = {
+        MONDAY_USAGE_COLS['team']: {'label': team_label},
+        MONDAY_USAGE_COLS['action']: {'label': action},
+        MONDAY_USAGE_COLS['hotel_id']: hotel_id,
+        MONDAY_USAGE_COLS['timestamp']: {'date': now_iso},
+    }
+    mutation = """
+    mutation ($board: ID!, $name: String!, $cols: JSON!) {
+      create_item(board_id: $board, item_name: $name, column_values: $cols) { id }
+    }
+    """
+    try:
+        # Item name is just a unique event ID — the actual action lives in the
+        # Action column, so this stays a clean event log for reporting/pivoting
+        # instead of encoding data into the name field.
+        event_id = f'EVT-{uuid.uuid4().hex[:10].upper()}'
+        monday_graphql(mutation, {
+            'board': MONDAY_USAGE_BOARD_ID,
+            'name':  event_id,
+            'cols':  json.dumps(col_values),
+        })
+    except Exception as e:
+        # Best-effort only — usage tracking must never surface an error to the user.
+        print(f"[usage tracking] failed to log '{action}' ({team_label}): {e}")
+
+
+@app.route('/log_usage', methods=['POST'])
+def log_usage():
+    """
+    Fire-and-forget usage ping — returns immediately without waiting on
+    Monday's API, so a slow/unreachable Monday can never block the request
+    that triggered it (or, on the single-threaded dev server, any other
+    request happening at the same time). Anonymous by design — no individual
+    identity is collected or stored.
+    """
+    body = request.get_json(force=True) or {}
+    action = (body.get('action') or '').strip()
+    hotel_id = (body.get('hotel_id') or '').strip()
+    if not action:
+        return jsonify({'ok': False}), 400
+
+    team_label = (body.get('team') or '').strip()
+    if team_label not in MONDAY_USAGE_TEAMS:
+        team_label = 'Other'
+
+    threading.Thread(target=_post_usage_event, args=(team_label, action, hotel_id), daemon=True).start()
+    return jsonify({'ok': True})
+
+
 @app.route('/submit_monday', methods=['POST'])
 def submit_monday():
     body = request.get_json(force=True)
@@ -3623,4 +3693,8 @@ def submit_app_feedback():
 
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5055)
+    # threaded=True matters here, not just as a nice-to-have: without it the
+    # dev server handles one request at a time, so the live progress polling
+    # during a Browse Data pull (or any background call, like usage pings)
+    # would queue behind whatever's already in flight instead of running concurrently.
+    app.run(debug=True, port=5055, threaded=True)

@@ -901,8 +901,28 @@
     <span class="nav-badge">DQE</span>
   </a>
   <button class="nav-link-btn" id="nav-app-feedback-btn" type="button">💬 Feedback</button>
+  <button class="nav-link-btn" id="nav-whoami-btn" type="button" style="display:none">👤 <span id="nav-whoami-label"></span></button>
   <span class="nav-right" id="today-label"></span>
 </nav>
+
+<!-- ── "Which team?" identity modal (one-time, anonymous usage tracking only) ── -->
+<div class="modal-overlay" id="identify-modal">
+  <div class="modal-box">
+    <h3>Quick one before you get started</h3>
+    <div class="form-row">
+      <label>Which team are you on?</label>
+      <select id="identify-team-select" style="width:100%;border:1.5px solid var(--border);border-radius:8px;padding:9px 12px;font-size:.875rem;font-family:inherit;color:var(--text);background:#FAFBFC;outline:none;">
+        <option value="DQE">DQE</option>
+        <option value="Deployment">Deployment</option>
+        <option value="Migrations">Migrations</option>
+        <option value="Other">Other</option>
+      </select>
+    </div>
+    <div class="modal-actions">
+      <button class="modal-submit" onclick="confirmIdentify()">Continue</button>
+    </div>
+  </div>
+</div>
 
 <!-- ── App Feedback modal ── -->
 <div class="modal-overlay" id="app-feedback-modal">
@@ -1592,6 +1612,7 @@
       }
       setCredStatus('ok', `Connected as ${creds.hotel_id} (${creds.environment}).`);
       setLockedState(true);
+      logUsage('Validate Connection', creds.hotel_id);
     } catch (e) {
       btn.disabled = false;
       setCredStatus('error', e.message);
@@ -1740,6 +1761,7 @@
       }
       statusEl.textContent = `Checked ${escHtml(payload.hotel_id)} just now.`;
       renderReadinessResults(data.results, payload.hotel_id);
+      logUsage('Config Snapshot', payload.hotel_id);
     } catch (e) {
       btn.disabled = false;
       statusEl.textContent = '';
@@ -1782,6 +1804,7 @@
       }
       statusEl.textContent = `Checked ${escHtml(payload.hotel_id)} just now.`;
       renderHotelStatsResults(data);
+      logUsage('Hotel Stats', payload.hotel_id);
     } catch (e) {
       btn.disabled = false;
       statusEl.textContent = '';
@@ -2031,6 +2054,7 @@
         return;
       }
       renderBrowseResults(data);
+      logUsage('Pull Bookings/Blocks/Folio', `${creds.hotel_id} (${dataType})`);
       if (dataType === 'folio') {
         setLastFolioPull(data.records || [], startDate, endDate);
         document.getElementById('browse-folio-pull-note').style.display = 'block';
@@ -2410,6 +2434,7 @@
       }
       window._lastResult = data;  // includes session_id for Monday file uploads
       renderReport(data);
+      logUsage('Run Analysis', data.hotel_id);
     } catch(e) {
       document.getElementById('spinner').style.display = 'none';
       document.getElementById('run-btn').disabled = false;
@@ -3067,6 +3092,61 @@
       btn.textContent = 'Submit';
     }
   }
+
+  // ── Team identity + usage tracking ────────────────────────────────────────
+  // Asked once, remembered in localStorage — fully anonymous, team only, no
+  // name or personal data. Used to attribute usage pings (Validate
+  // Connection, Pull Data, Config Snapshot, Hotel Stats, Run Analysis) to a
+  // team on the DQE Usage Monday board. The modal blocks the rest of the page
+  // until a team is picked (no Skip) — but logUsage() itself is fire-and-forget,
+  // so a failed ping afterward never surfaces to the user.
+  function getDqeIdentity() {
+    try { return JSON.parse(localStorage.getItem('dqe_identity') || 'null'); } catch (e) { return null; }
+  }
+
+  function logUsage(action, hotelId) {
+    const identity = getDqeIdentity();
+    fetch('/log_usage', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        team: identity ? identity.team : 'Other',
+        action,
+        hotel_id: hotelId || '',
+      }),
+    }).catch(() => {});
+  }
+
+  function updateWhoAmIBadge() {
+    const identity = getDqeIdentity();
+    const btn = document.getElementById('nav-whoami-btn');
+    if (identity) {
+      document.getElementById('nav-whoami-label').textContent = identity.team;
+      btn.style.display = 'inline-flex';
+    } else {
+      btn.style.display = 'none';
+    }
+  }
+
+  (function () {
+    if (!getDqeIdentity()) {
+      document.getElementById('identify-modal').classList.add('open');
+    }
+    updateWhoAmIBadge();
+  })();
+
+  function confirmIdentify() {
+    const team = document.getElementById('identify-team-select').value;
+    localStorage.setItem('dqe_identity', JSON.stringify({ team }));
+    document.getElementById('identify-modal').classList.remove('open');
+    updateWhoAmIBadge();
+  }
+
+  document.getElementById('nav-whoami-btn').addEventListener('click', () => {
+    const identity = getDqeIdentity();
+    if (identity) document.getElementById('identify-team-select').value = identity.team;
+    document.getElementById('identify-modal').classList.add('open');
+  });
 
   // ── App Feedback modal (general feedback, not tied to a run) ─────────────
   fetch('/monday_users')
