@@ -11,6 +11,7 @@ import urllib.parse
 import urllib.error
 import xml.etree.ElementTree as ET
 from flask import Flask, request, render_template, jsonify
+from werkzeug.exceptions import HTTPException
 import pandas as pd
 from openpyxl import load_workbook
 from openpyxl.utils import get_column_letter
@@ -20,8 +21,28 @@ from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024
 
-# Temporary in-memory store for uploaded files (keyed by session UUID)
+
+@app.errorhandler(Exception)
+def handle_unexpected_error(e):
+    """
+    Every route in this app returns JSON, and every frontend fetch() call does
+    resp.json() unconditionally — so an unhandled exception anywhere used to
+    fall through to Flask's default HTML error page, which the frontend then
+    failed to parse as "Unexpected token '<' ... is not valid JSON" instead of
+    showing the actual error. This guarantees JSON out of every route, always.
+    """
+    if isinstance(e, HTTPException):
+        return jsonify({'error': e.description}), e.code
+    import traceback
+    print(f"[unhandled error] {e}\n{traceback.format_exc()}")
+    return jsonify({'error': str(e)}), 500
+
+
+# Temporary in-memory store for uploaded files (keyed by session UUID) —
+# bounded below (see _FILE_STORE_MAX) so a long-running server doesn't
+# accumulate unbounded memory from runs that are never submitted to Monday.
 _file_store = {}
+_FILE_STORE_MAX = 20
 
 TODAY = datetime.date.today()
 
@@ -1195,7 +1216,10 @@ PSEUDO_ROOM_TYPES_ORACLE = {'PM', 'PS', 'POS', 'PSE', 'PI'}
 
 # In-memory progress tracker for long-running Oracle fetches, keyed by a
 # client-supplied progress_id and polled via GET /oracle_progress/<id>.
+# Bounded (see _report below) so a long-running server doesn't accumulate one
+# stale entry per fetch forever.
 _oracle_progress = {}
+_ORACLE_PROGRESS_MAX = 50
 
 
 # ── Generic OHIP "Browse Data" fetch (Postman-replacement mode) ─────────────
@@ -1704,6 +1728,8 @@ def fetch_oracle_raw(data_type, hostname, access_token, app_key, enterprise_id, 
     def _report(status, page=0, total=0):
         if progress_id:
             _oracle_progress[progress_id] = {'status': status, 'page': page, 'total_fetched': total}
+            while len(_oracle_progress) > _ORACLE_PROGRESS_MAX:
+                _oracle_progress.pop(next(iter(_oracle_progress)))
 
     if not hostname.startswith('https://'):
         hostname = f'https://{hostname}'
@@ -3047,6 +3073,8 @@ def analyze():
             'arrivals': (arrivals_file.filename or 'arrivals.xml', arrivals_raw) if arrivals_raw else None,
             'xlsx':     (f"DQE_{result.get('hotel_name','report')}_{result.get('analysis_date','')}.xlsx".replace(' ','_'), base64.b64decode(result['xlsx_b64'])) if result.get('xlsx_b64') else None,
         }
+        while len(_file_store) > _FILE_STORE_MAX:
+            _file_store.pop(next(iter(_file_store)))
         result['session_id'] = session_id
 
         # Persist to run history (best-effort — don't fail the analysis if this errors)
@@ -3547,6 +3575,48 @@ def submit_monday():
 
         return jsonify({'success': True, 'item_id': item_id})
 
+    except Exception as e:
+        import traceback
+        return jsonify({'error': str(e), 'trace': traceback.format_exc()}), 500
+
+
+@app.route('/submit_app_feedback', methods=['POST'])
+def submit_app_feedback():
+    """
+    General app feedback/bug reports — not tied to a specific analysis run,
+    unlike /submit_monday. Posts to the same DQE Feedback board with just the
+    feedback text and who submitted it; the run-specific columns are left blank.
+    """
+    body = request.get_json(force=True)
+    feedback = (body.get('feedback') or '').strip()
+    submitted_by_id = body.get('submitted_by_id', '')
+    if not feedback:
+        return jsonify({'error': 'Feedback text is required.'}), 400
+
+    today_str = datetime.date.today().isoformat()
+    col_values = {MONDAY_COLS['feedback']: {'text': feedback}}
+    if submitted_by_id:
+        col_values['multiple_person_mm4t9tcq'] = {
+            'personsAndTeams': [{'id': int(submitted_by_id), 'kind': 'person'}]
+        }
+
+    mutation = """
+    mutation ($board: ID!, $name: String!, $cols: JSON!) {
+      create_item(board_id: $board, item_name: $name, column_values: $cols) {
+        id
+      }
+    }
+    """
+    try:
+        resp = monday_graphql(mutation, {
+            'board': MONDAY_BOARD_ID,
+            'name':  f'App Feedback — {today_str}',
+            'cols':  json.dumps(col_values),
+        })
+        errors = resp.get('errors') or (resp.get('data', {}).get('create_item') is None and ['Unknown error'])
+        if errors:
+            return jsonify({'error': str(errors)}), 500
+        return jsonify({'success': True, 'item_id': resp['data']['create_item']['id']})
     except Exception as e:
         import traceback
         return jsonify({'error': str(e), 'trace': traceback.format_exc()}), 500
