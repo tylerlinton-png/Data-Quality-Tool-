@@ -1220,6 +1220,10 @@
             <input type="date" id="api-bookings-pull-end" title="End date (inclusive)" style="flex:1;padding:6px 8px;font-size:.78rem;border:1px solid var(--border-mid);border-radius:6px"/>
           </div>
           <div style="font-size:.68rem;color:var(--muted);margin-top:3px">Both dates inclusive — arrival date range</div>
+          <label style="display:flex;align-items:center;gap:6px;margin-top:8px;font-size:.72rem;color:var(--muted);cursor:pointer">
+            <input type="checkbox" id="api-bookings-filter-pseudo-rooms"/>
+            Filter Pseudo Rooms <span style="font-weight:400">(PM, PI, POS, PF)</span>
+          </label>
           <button type="button" class="oracle-test-btn" id="api-bookings-pull-btn" style="width:100%;margin-top:6px;background:transparent;color:var(--duetto-dark);border:1px solid var(--border-mid)">
             Pull Live Data Now
           </button>
@@ -2427,6 +2431,7 @@
     if (_lastBookingsPull) {
       const bookingsBlob = new Blob([JSON.stringify(_lastBookingsPull.records)], { type: 'application/json' });
       fd.append('api_bookings_records', bookingsBlob, 'api_bookings_records.json');
+      fd.append('api_bookings_filter_pseudo_rooms', document.getElementById('api-bookings-filter-pseudo-rooms').checked ? 'true' : 'false');
     }
 
     const webhookUrl = document.getElementById('webhook-url').value.trim();
@@ -2947,8 +2952,12 @@
         </table>
       </div></div>`;
 
+    const pseudoNote = v.filter_pseudo_rooms
+      ? 'pseudo rooms (PM, PI, POS, PF) filtered from both sides'
+      : 'pseudo rooms not filtered — toggle on before pulling to exclude PM/PI/POS/PF';
+
     content.innerHTML = `
-      <div class="section-label">API Bookings Pull vs. Duetto Bookings Report <span style="font-weight:400;color:var(--muted);text-transform:none;letter-spacing:0">(joined by confirmation #)</span></div>
+      <div class="section-label">API Bookings Pull vs. Duetto Bookings Report <span style="font-weight:400;color:var(--muted);text-transform:none;letter-spacing:0">(joined by confirmation # — ${pseudoNote})</span></div>
       <div class="accuracy-row">
         <div class="acc-card"><div class="acc-icon">✓</div><div><div class="acc-label">Matched Reservations</div><div class="acc-value">${v.matched_count}</div></div></div>
         <div class="acc-card"><div class="acc-icon">⚠</div><div><div class="acc-label">Rooms/Rate Mismatches</div><div class="acc-value">${v.mismatch_count}</div></div></div>

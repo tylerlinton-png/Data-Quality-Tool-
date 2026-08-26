@@ -662,7 +662,18 @@ def analyze_api_folio_variance(api_records, folio_df, adjustment_percent=0.0, to
     }
 
 
-def analyze_api_bookings_variance(api_records, res_df, tolerance=1.0):
+# Pseudo/PM room type codes specific to the API Bookings Comparison — per
+# Nicolas, distinct from PSEUDO_ROOM_TYPES_ORACLE used elsewhere (no PS/PSE,
+# adds PF). Filtering is opt-in via a UI toggle, not automatic — some analysts
+# want to see the raw discrepancies pseudo rooms cause, others don't.
+BOOKINGS_PSEUDO_ROOM_CODES = {'PM', 'PI', 'POS', 'PF'}
+
+
+def _is_bookings_pseudo_room(room_type) -> bool:
+    return str(room_type or '').strip().upper() in BOOKINGS_PSEUDO_ROOM_CODES
+
+
+def analyze_api_bookings_variance(api_records, res_df, tolerance=1.0, filter_pseudo_rooms=False):
     """
     Reservation-level reconciliation between a live OHIP reservations pull and
     Duetto's own Bookings Report, joined on confirmation number — OHIP's
@@ -673,6 +684,13 @@ def analyze_api_bookings_variance(api_records, res_df, tolerance=1.0):
     Each side is one row per reservation here — if a reservation has multiple
     room-stay lines this treats only the first/flattened one, same known
     limitation as the rest of the reservations Browse Data view.
+
+    filter_pseudo_rooms: opt-in toggle. Duetto's Bookings Report may already
+    exclude pseudo/PM room types (PM, PI, POS, PF) while the live OHIP pull
+    does not — when on, both sides are filtered before matching so pseudo
+    rooms don't show up as false api_only discrepancies. The raw pull/download
+    elsewhere in the app is never touched by this — filtering is local to this
+    comparison only.
     """
     if res_df is None or not api_records:
         return None
@@ -686,8 +704,11 @@ def analyze_api_bookings_variance(api_records, res_df, tolerance=1.0):
     rate_col  = next((c for c in res_df.columns if c.upper() in ('RATE_AMOUNT', 'RATE', 'ADR')), None)
     date_col  = next((c for c in res_df.columns if 'STAY_DATE' in c.upper() or c.upper() == 'DATE'), None)
     status_col = next((c for c in res_df.columns if c.upper() in ('RESERVATION_STATUS', 'STATUS', 'SHORT_RESV_STATUS')), None)
+    duetto_room_type_col = next((c for c in res_df.columns if 'ROOM_TYPE' in c.upper() or 'ROOM_CATEGORY' in c.upper()), None)
 
     duetto = res_df.copy()
+    if filter_pseudo_rooms and duetto_room_type_col:
+        duetto = duetto[~duetto[duetto_room_type_col].apply(_is_bookings_pseudo_room)]
     duetto['_CONF']  = duetto[conf_col].astype(str).str.strip()
     duetto['_ROOMS'] = pd.to_numeric(duetto[rooms_col], errors='coerce').fillna(0) if rooms_col else 1
     duetto['_RATE']  = pd.to_numeric(duetto[rate_col], errors='coerce').fillna(0) if rate_col else 0.0
@@ -703,6 +724,8 @@ def analyze_api_bookings_variance(api_records, res_df, tolerance=1.0):
     for r in api_records:
         conf = str(r.get('_confirmationNo') or '').strip()
         if not conf:
+            continue
+        if filter_pseudo_rooms and _is_bookings_pseudo_room(r.get('roomStay.roomType')):
             continue
         rooms = r.get('roomStay.numberOfRooms')
         try:
@@ -763,6 +786,7 @@ def analyze_api_bookings_variance(api_records, res_df, tolerance=1.0):
 
     return {
         'status': 'ok',
+        'filter_pseudo_rooms': filter_pseudo_rooms,
         'matched_count': matched_count,
         'mismatch_count': mismatch_count,
         'api_only_count': api_only_count,
@@ -2201,7 +2225,7 @@ def classify_revenue(row, res_df, folio_analysis=None):
 def run_analysis(dva_raw, res_raw, folio_raw=None, arrivals_raw=None, arrivals_filename='',
                   arrivals_df=None, cashier_journal_raw=None, cashier_journal_filename='',
                   api_folio_records=None, api_folio_adjustment_percent=0.0,
-                  api_bookings_records=None):
+                  api_bookings_records=None, api_bookings_filter_pseudo_rooms=False):
     """
     arrivals_df: pass a pre-built DataFrame (e.g. from a live Oracle OHIP fetch)
     to bypass file parsing entirely. Takes priority over arrivals_raw.
@@ -2245,7 +2269,8 @@ def run_analysis(dva_raw, res_raw, folio_raw=None, arrivals_raw=None, arrivals_f
     api_bookings_variance = None
     if api_bookings_records and res_df is not None:
         try:
-            api_bookings_variance = analyze_api_bookings_variance(api_bookings_records, res_df)
+            api_bookings_variance = analyze_api_bookings_variance(
+                api_bookings_records, res_df, filter_pseudo_rooms=api_bookings_filter_pseudo_rooms)
         except Exception as e:
             api_bookings_variance = {'status': 'error', 'message': str(e)}
     elif api_bookings_records and res_df is None:
@@ -2987,13 +3012,15 @@ def analyze():
         except (ValueError, TypeError):
             api_folio_adjustment_percent = 0.0
         api_bookings_records = json.loads(api_bookings_records_file.read()) if api_bookings_records_file else None
+        api_bookings_filter_pseudo_rooms = (request.form.get('api_bookings_filter_pseudo_rooms') or '').lower() == 'true'
 
         result     = run_analysis(dva_raw, res_raw, folio_raw, arrivals_raw, arrivals_filename,
                                    cashier_journal_raw=cashier_journal_raw,
                                    cashier_journal_filename=cashier_journal_filename,
                                    api_folio_records=api_folio_records,
                                    api_folio_adjustment_percent=api_folio_adjustment_percent,
-                                   api_bookings_records=api_bookings_records)
+                                   api_bookings_records=api_bookings_records,
+                                   api_bookings_filter_pseudo_rooms=api_bookings_filter_pseudo_rooms)
 
         if result.get('no_dva'):
             result['xlsx_b64'] = None
