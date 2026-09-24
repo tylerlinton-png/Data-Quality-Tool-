@@ -1725,9 +1725,9 @@
   // the "don't let the user fetch without a date range" rule enforced again
   // (defense-in-depth) in the click handler and server-side.
   function updateBrowseFetchReady() {
+    // End Date is optional — a blank End Date defaults to Start Date (single-day pull).
     const hasStart = !!document.getElementById('browse-start-date').value;
-    const hasEnd = !!document.getElementById('browse-end-date').value;
-    document.getElementById('browse-fetch-btn').disabled = !(hasStart && hasEnd);
+    document.getElementById('browse-fetch-btn').disabled = !hasStart;
   }
   document.getElementById('browse-start-date').addEventListener('input', updateBrowseFetchReady);
   document.getElementById('browse-end-date').addEventListener('input', updateBrowseFetchReady);
@@ -1773,12 +1773,13 @@
   document.getElementById('hotel-stats-run-btn').addEventListener('click', async () => {
     const payload = getSharedCredentials();
     payload.start_date = document.getElementById('hotel-stats-start-date').value;
-    payload.end_date = document.getElementById('hotel-stats-end-date').value;
+    // End Date is optional — a blank End Date defaults to Start Date (single-day check).
+    payload.end_date = document.getElementById('hotel-stats-end-date').value || payload.start_date;
     const required = ['hostname', 'hotel_id', 'app_key', 'client_id', 'start_date', 'end_date'];
     const missing = required.filter(k => !payload[k]);
     if (missing.length) {
       alert(missing.includes('start_date') || missing.includes('end_date')
-        ? 'Select a start and end date before running Hotel Stats.'
+        ? 'Select a start date before running Hotel Stats.'
         : 'Missing required field(s): ' + missing.join(', '));
       return;
     }
@@ -1804,6 +1805,9 @@
       }
       statusEl.textContent = `Checked ${escHtml(payload.hotel_id)} just now.`;
       renderHotelStatsResults(data);
+      _hotelStatsHotelId = payload.hotel_id;
+      _hotelStatsStartDate = payload.start_date;
+      _hotelStatsEndDate = payload.end_date;
       logUsage('Hotel Stats', payload.hotel_id);
     } catch (e) {
       btn.disabled = false;
@@ -1870,9 +1874,14 @@
   }
 
   let _hotelStatsRows = [];
+  let _hotelStatsHotelId = '';
+  let _hotelStatsStartDate = '';
+  let _hotelStatsEndDate = '';
   function downloadHotelStatsExport(delim, ext, mime) {
     const cols = _hotelStatsRows.length ? Object.keys(_hotelStatsRows[0]) : [];
-    downloadDelimited(_hotelStatsRows, cols, 'dqe_hotel_stats', delim, ext, mime);
+    const filenameBase = `dqe_hotel_stats_${_hotelStatsHotelId || 'unknown'}`;
+    downloadDelimited(_hotelStatsRows, cols, filenameBase, delim, ext, mime,
+      dateStampFor(_hotelStatsStartDate, _hotelStatsEndDate));
   }
 
   let _readinessResults = [];
@@ -2017,7 +2026,8 @@
     const dataType = document.getElementById('browse-data-type').value;
     const creds = getSharedCredentials();
     const startDate = document.getElementById('browse-start-date').value;
-    const endDate = document.getElementById('browse-end-date').value;
+    // End Date is optional — a blank End Date defaults to Start Date (single-day pull).
+    const endDate = document.getElementById('browse-end-date').value || startDate;
 
     // client_secret is intentionally not required here — it may fall back to
     // a previously saved credential for this hotel_id, checked server-side.
@@ -2025,7 +2035,7 @@
     const missing = ['hostname', 'hotel_id', 'app_key', 'client_id', 'start_date', 'end_date'].filter(k => !required[k]);
     if (missing.length) {
       const label = missing.includes('start_date') || missing.includes('end_date')
-        ? 'Select a start and end date before fetching.'
+        ? 'Select a start date before fetching.'
         : 'Missing required field(s): ' + missing.join(', ');
       alert(label);
       return;
@@ -2054,6 +2064,9 @@
         return;
       }
       renderBrowseResults(data);
+      _browseHotelId = creds.hotel_id;
+      _browseStartDate = startDate;
+      _browseEndDate = endDate;
       logUsage('Pull Bookings/Blocks/Folio', `${creds.hotel_id} (${dataType})`);
       if (dataType === 'folio') {
         setLastFolioPull(data.records || [], startDate, endDate);
@@ -2079,6 +2092,9 @@
   let _browseShowAllFields = false;
 
   let _browseDataType = '';
+  let _browseHotelId = '';
+  let _browseStartDate = '';
+  let _browseEndDate = '';
 
   function renderBrowseResults(data) {
     _browseRecords = data.records || [];
@@ -2155,13 +2171,22 @@
     return [headerRow, ...dataRows].join('\r\n');
   }
 
-  function downloadDelimited(records, columns, filenameBase, delim, ext, mime) {
+  // Prefer the actual data date(s) over "today" so downloads are identifiable
+  // in a downloads folder without opening them — falls back to today's date
+  // when no data date range is known (e.g. Config Snapshot, a point-in-time check).
+  function dateStampFor(start, end) {
+    if (!start) return new Date().toISOString().slice(0, 10);
+    if (!end || end === start) return start;
+    return `${start}_to_${end}`;
+  }
+
+  function downloadDelimited(records, columns, filenameBase, delim, ext, mime, dateStamp) {
     if (!records.length) { alert('No records to export.'); return; }
     const content = buildDelimitedExportFrom(records, columns, delim);
     const blob = new Blob([content], { type: mime });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    const stamp = new Date().toISOString().slice(0, 10);
+    const stamp = dateStamp || new Date().toISOString().slice(0, 10);
     a.href = url;
     a.download = `${filenameBase}_${stamp}.${ext}`;
     document.body.appendChild(a);
@@ -2171,7 +2196,9 @@
   }
 
   function downloadBrowseExport(delim, ext, mime) {
-    downloadDelimited(_browseRecords, _browseAllColumns, `dqe_browse_${_browseDataType}`, delim, ext, mime);
+    const filenameBase = `dqe_${_browseDataType}_${_browseHotelId || 'unknown'}`;
+    downloadDelimited(_browseRecords, _browseAllColumns, filenameBase, delim, ext, mime,
+      dateStampFor(_browseStartDate, _browseEndDate));
   }
 
   document.getElementById('browse-download-csv-btn').addEventListener('click', () => {
@@ -2222,12 +2249,13 @@
   document.getElementById('api-folio-pull-btn').addEventListener('click', async () => {
     const creds = getSharedCredentials();
     const startDate = document.getElementById('api-folio-pull-start').value;
-    const endDate = document.getElementById('api-folio-pull-end').value;
+    // End Date is optional — a blank End Date defaults to Start Date (single-day pull).
+    const endDate = document.getElementById('api-folio-pull-end').value || startDate;
     const required = { ...creds, start_date: startDate, end_date: endDate };
     const missing = ['hostname', 'hotel_id', 'app_key', 'client_id', 'start_date', 'end_date'].filter(k => !required[k]);
     if (missing.length) {
       alert(missing.includes('start_date') || missing.includes('end_date')
-        ? 'Select a start and end date to pull.'
+        ? 'Select a start date to pull.'
         : 'Missing required field(s): ' + missing.join(', '));
       return;
     }
@@ -2280,12 +2308,13 @@
   document.getElementById('api-bookings-pull-btn').addEventListener('click', async () => {
     const creds = getSharedCredentials();
     const startDate = document.getElementById('api-bookings-pull-start').value;
-    const endDate = document.getElementById('api-bookings-pull-end').value;
+    // End Date is optional — a blank End Date defaults to Start Date (single-day pull).
+    const endDate = document.getElementById('api-bookings-pull-end').value || startDate;
     const required = { ...creds, start_date: startDate, end_date: endDate };
     const missing = ['hostname', 'hotel_id', 'app_key', 'client_id', 'start_date', 'end_date'].filter(k => !required[k]);
     if (missing.length) {
       alert(missing.includes('start_date') || missing.includes('end_date')
-        ? 'Select a start and end date to pull.'
+        ? 'Select a start date to pull.'
         : 'Missing required field(s): ' + missing.join(', '));
       return;
     }
