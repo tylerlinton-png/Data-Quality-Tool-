@@ -503,6 +503,18 @@ def parse_dva_excel(raw: bytes):
     return df, hotel_name or 'Unknown Hotel'
 
 
+def dva_table_rows(comp_df):
+    return [{
+        'stay_date': str(r.StayDay),
+        'period': r.Period,
+        'duetto_rooms': r.DuettoCommitRooms, 'pms_rooms': r.PMSCommitRooms, 'room_diff': r.RoomDiff,
+        'commit_status': r.CommitStatus,
+        'duetto_revenue': round(r.DuettoRevenue, 2), 'pms_revenue': round(r.PMSRevenue, 2),
+        'revenue_diff': round(r.RevenueDiff, 2),
+        'revenue_status': r.RevenueStatus,
+    } for r in comp_df.itertuples()]
+
+
 # ── Bookings / Blocks TSV/CSV parser ─────────────────────────────────────────
 
 def parse_bookings(raw: bytes) -> pd.DataFrame:
@@ -695,7 +707,10 @@ def _is_bookings_pseudo_room(room_type) -> bool:
     return str(room_type or '').strip().upper() in BOOKINGS_PSEUDO_ROOM_CODES
 
 
-def analyze_api_bookings_variance(api_records, res_df, tolerance=1.0, filter_pseudo_rooms=False):
+OHIP_NON_DEDUCTING_STATUSES = {'CANCELLED', 'NOSHOW', 'NO SHOW', 'DAY CANCELLED', 'DAYCANCELLED'}
+
+
+def analyze_api_bookings_variance(api_records, res_df, tolerance=1.0, filter_pseudo_rooms=True):
     """
     Reservation-level reconciliation between a live OHIP reservations pull and
     Duetto's own Bookings Report, joined on confirmation number — OHIP's
@@ -707,12 +722,24 @@ def analyze_api_bookings_variance(api_records, res_df, tolerance=1.0, filter_pse
     room-stay lines this treats only the first/flattened one, same known
     limitation as the rest of the reservations Browse Data view.
 
-    filter_pseudo_rooms: opt-in toggle. Duetto's Bookings Report may already
-    exclude pseudo/PM room types (PM, PI, POS, PF) while the live OHIP pull
-    does not — when on, both sides are filtered before matching so pseudo
-    rooms don't show up as false api_only discrepancies. The raw pull/download
-    elsewhere in the app is never touched by this — filtering is local to this
-    comparison only.
+    Cancelled/no-show reservations are always excluded from the API side's
+    room/rate counts (not optional) — confirmed live against hotel ho425658
+    that Duetto's own Bookings Report already carries NUM_ROOMS=0 for these,
+    so counting them on the API side produced false overstated room counts.
+
+    filter_pseudo_rooms: on by default. Duetto's Bookings Report already
+    excludes pseudo/PM room types (PM, PI, POS, PF) while the live OHIP pull
+    does not — confirmed live (ho425658, 2026-06-14) that leaving this off
+    overstates the API room count vs. the authoritative DVA PMS Commit figure
+    by exactly the number of PM rows present. Both sides are filtered before
+    matching so pseudo rooms don't show up as false api_only discrepancies.
+    The raw pull/download elsewhere in the app is never touched by this —
+    filtering is local to this comparison only.
+
+    Rate differences are only used to flag a mismatch for future-dated stays.
+    For historic (past) stay dates, the PMS rate field reflects folio-derived
+    settlement rather than the originally booked rate, so comparing it against
+    Duetto's booked rate is meaningless — only rooms_diff matters there.
     """
     if res_df is None or not api_records:
         return None
@@ -743,76 +770,97 @@ def analyze_api_bookings_variance(api_records, res_df, tolerance=1.0, filter_pse
     )
 
     api_by_conf = {}
+    pseudo_excluded = 0
     for r in api_records:
         conf = str(r.get('_confirmationNo') or '').strip()
         if not conf:
             continue
         if filter_pseudo_rooms and _is_bookings_pseudo_room(r.get('roomStay.roomType')):
+            pseudo_excluded += 1
             continue
-        rooms = r.get('roomStay.numberOfRooms')
         try:
-            rooms = float(rooms) if rooms is not None else 0.0
+            rooms = float(r.get('roomStay.numberOfRooms') or 0)
         except (ValueError, TypeError):
             rooms = 0.0
-        rate = r.get('roomStay.rateAmount.amount')
+        status = r.get('computedReservationStatus') or ''
+        cancelled = status.strip().upper() in OHIP_NON_DEDUCTING_STATUSES
+        if cancelled:
+            rooms = 0.0
         try:
-            rate = float(rate) if rate is not None else 0.0
+            rate = float(r.get('roomStay.rateAmount.amount') or 0)
         except (ValueError, TypeError):
             rate = 0.0
+        prev = api_by_conf.get(conf, {})
         api_by_conf[conf] = {
-            'rooms': api_by_conf.get(conf, {}).get('rooms', 0.0) + rooms,
+            'rooms': prev.get('rooms', 0.0) + rooms,
             'rate': rate,
-            'status': r.get('computedReservationStatus') or '',
+            'status': status,
+            'cancelled': cancelled,
+            'room_type': r.get('roomStay.roomType') or '',
             'arrival_date': r.get('roomStay.arrivalDate') or '',
+            'departure_date': r.get('roomStay.departureDate') or '',
         }
 
-    all_confs = set(api_by_conf) | set(duetto_grouped.index)
     rows = []
-    matched_count = mismatch_count = api_only_count = duetto_only_count = 0
+    counts = {'matched': 0, 'cancelled_in_opera': 0, 'room_count_diff': 0, 'rate_diff': 0,
+              'opera_only': 0, 'duetto_only': 0}
+    cancelled_both = 0
 
-    for conf in sorted(all_confs):
-        api_entry = api_by_conf.get(conf)
-        duetto_row = duetto_grouped.loc[conf] if conf in duetto_grouped.index else None
-
-        if api_entry and duetto_row is None:
-            rows.append({
-                'confirmation_no': conf, 'api_rooms': api_entry['rooms'], 'api_rate': round(api_entry['rate'], 2),
-                'api_status': api_entry['status'], 'duetto_rooms': None, 'duetto_rate': None,
-                'stay_date': api_entry['arrival_date'], 'status': 'api_only',
-            })
-            api_only_count += 1
-            continue
-        if duetto_row is not None and not api_entry:
-            rows.append({
-                'confirmation_no': conf, 'api_rooms': None, 'api_rate': None, 'api_status': None,
-                'duetto_rooms': float(duetto_row['rooms']), 'duetto_rate': round(float(duetto_row['rate']), 2),
-                'stay_date': str(duetto_row['stay_date']) if duetto_row['stay_date'] else '', 'status': 'duetto_only',
-            })
-            duetto_only_count += 1
+    for conf in sorted(set(api_by_conf) | set(duetto_grouped.index)):
+        a = api_by_conf.get(conf)
+        d = duetto_grouped.loc[conf] if conf in duetto_grouped.index else None
+        a_rooms = a['rooms'] if a else 0.0
+        d_rooms = float(d['rooms']) if d is not None else 0.0
+        if a_rooms == 0 and d_rooms == 0:
+            cancelled_both += 1
             continue
 
-        rooms_diff = api_entry['rooms'] - float(duetto_row['rooms'])
-        rate_diff  = api_entry['rate']  - float(duetto_row['rate'])
-        is_mismatch = abs(rooms_diff) > 0 or abs(rate_diff) > tolerance
+        stay = d['stay_date'] if d is not None and d['stay_date'] else None
+        is_historic = stay is not None and stay < TODAY
+        rate_diff = (a['rate'] - float(d['rate'])) if (a and d is not None) else 0.0
+
+        if a is None:
+            category, reason = 'duetto_only', 'In Duetto, not returned by the Opera pull — check the pull date range or whether the reservation exists in Opera'
+        elif d is None:
+            category, reason = 'opera_only', 'Active in Opera, not in the Duetto Bookings Report — Duetto may not have received this reservation'
+        elif a['cancelled'] and d_rooms > 0:
+            category, reason = 'cancelled_in_opera', f"Cancelled in Opera, still {d['status'] or 'active'} in Duetto — Duetto likely missed the cancellation"
+        elif a_rooms != d_rooms:
+            category, reason = 'room_count_diff', f'Room count differs: Opera {a_rooms:g} vs Duetto {d_rooms:g}'
+        elif not is_historic and abs(rate_diff) > tolerance:
+            category, reason = 'rate_diff', f'Rate differs by {rate_diff:+,.2f} (future stay)'
+        else:
+            category, reason = 'matched', ''
+        counts[category] += 1
+
         rows.append({
             'confirmation_no': conf,
-            'api_rooms': api_entry['rooms'], 'api_rate': round(api_entry['rate'], 2),
-            'duetto_rooms': float(duetto_row['rooms']), 'duetto_rate': round(float(duetto_row['rate']), 2),
-            'stay_date': str(duetto_row['stay_date']) if duetto_row['stay_date'] else api_entry['arrival_date'],
-            'status': 'mismatch' if is_mismatch else 'matched',
+            'stay_date': str(stay) if stay else (a['arrival_date'] if a else ''),
+            'room_type': a['room_type'] if a else '',
+            'opera_dates': f"{a['arrival_date']} → {a['departure_date']}" if a else '',
+            'api_rooms': a_rooms if a else None,
+            'api_status': a['status'] if a else None,
+            'api_rate': round(a['rate'], 2) if a else None,
+            'duetto_rooms': d_rooms if d is not None else None,
+            'duetto_status': d['status'] if d is not None else None,
+            'duetto_rate': round(float(d['rate']), 2) if d is not None else None,
+            'category': category,
+            'reason': reason,
         })
-        if is_mismatch:
-            mismatch_count += 1
-        else:
-            matched_count += 1
 
+    duetto_total = sum(r['duetto_rooms'] or 0 for r in rows)
+    opera_total = sum(r['api_rooms'] or 0 for r in rows)
     return {
         'status': 'ok',
         'filter_pseudo_rooms': filter_pseudo_rooms,
-        'matched_count': matched_count,
-        'mismatch_count': mismatch_count,
-        'api_only_count': api_only_count,
-        'duetto_only_count': duetto_only_count,
+        'counts': counts,
+        'issue_count': sum(v for k, v in counts.items() if k != 'matched'),
+        'duetto_total_rooms': duetto_total,
+        'opera_total_rooms': opera_total,
+        'room_diff': duetto_total - opera_total,
+        'pseudo_excluded': pseudo_excluded,
+        'cancelled_both_excluded': cancelled_both,
+        'rate_compared': any(r['stay_date'] and r['stay_date'] >= str(TODAY) for r in rows),
         'rows': rows,
     }
 
@@ -1655,15 +1703,24 @@ def run_hotel_stats(hostname, access_token, app_key, hotel_id, ext_system_code, 
 
 
 def _prep_reservation_for_display(rec):
-    """Inject a synthetic, human confirmation number field before flattening
-    — mirrors the extraction logic already used for the comparison engine."""
-    conf = None
-    for item in rec.get('reservationIdList', []):
-        item_type = str(item.get('type', '')).upper()
-        if item_type in ('RESERVATION', 'ID', 'RESERVATIONID') or (item_type != 'CONFIRMATION' and conf is None):
-            conf = str(item.get('id', '')).strip()
-            if item_type == 'RESERVATION':
-                break
+    """
+    Inject a synthetic, human confirmation number field before flattening.
+
+    Confirmed live (2026-10-05) against a real hotel: reservationIdList
+    carries two distinct IDs per reservation — type "Reservation" (Opera's
+    internal reservation ID) and type "Confirmation" (the guest-facing
+    confirmation number). Duetto's Bookings Report ALTERNATE_SOURCE_ID column
+    is the Confirmation number, not the Reservation ID — a prior version of
+    this function preferred "Reservation" and broke the join entirely (0/110
+    matches instead of 105/110) wherever both ID types were present, which is
+    the common case. Falls back to the Reservation ID (or any other type) only
+    if no Confirmation-type entry exists.
+    """
+    id_list = rec.get('reservationIdList', [])
+    conf = next((str(item.get('id', '')).strip()
+                 for item in id_list if str(item.get('type', '')).upper() == 'CONFIRMATION'), None)
+    if not conf:
+        conf = next((str(item.get('id', '')).strip() for item in id_list), '')
     rec = dict(rec)
     rec['_confirmationNo'] = conf or ''
     return rec
@@ -2252,7 +2309,7 @@ def classify_revenue(row, res_df, folio_analysis=None):
 def run_analysis(dva_raw, res_raw, folio_raw=None, arrivals_raw=None, arrivals_filename='',
                   arrivals_df=None, cashier_journal_raw=None, cashier_journal_filename='',
                   api_folio_records=None, api_folio_adjustment_percent=0.0,
-                  api_bookings_records=None, api_bookings_filter_pseudo_rooms=False):
+                  api_bookings_records=None, api_bookings_filter_pseudo_rooms=True):
     """
     arrivals_df: pass a pre-built DataFrame (e.g. from a live Oracle OHIP fetch)
     to bypass file parsing entirely. Takes priority over arrivals_raw.
@@ -3000,6 +3057,18 @@ def browse_oracle():
         'all_columns': all_columns,
         'column_labels': column_labels,
     })
+
+
+@app.route('/dva_preview', methods=['POST'])
+def dva_preview():
+    f = request.files.get('dva')
+    if not f:
+        return jsonify({'error': 'No DVA file uploaded.'}), 400
+    try:
+        comp_df, hotel_name = parse_dva_excel(f.read())
+    except Exception as e:
+        return jsonify({'error': f'Could not read DVA file: {e}'}), 400
+    return jsonify({'hotel_name': hotel_name, 'rows': dva_table_rows(comp_df)})
 
 
 @app.route('/analyze', methods=['POST'])

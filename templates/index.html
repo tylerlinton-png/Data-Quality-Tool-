@@ -355,6 +355,11 @@
     flex-wrap: wrap;
     margin-bottom: 28px;
   }
+  .accuracy-row.compact { flex-wrap: nowrap; gap: 12px; }
+  .accuracy-row.compact .acc-card { min-width: 0; padding: 14px 16px; gap: 10px; }
+  .accuracy-row.compact .acc-icon { width: 32px; height: 32px; font-size: 1.1rem; }
+  .accuracy-row.compact .acc-card > div:last-child { min-width: 0; }
+  .accuracy-row.compact .acc-label { font-size: .66rem; }
   .acc-card {
     background: var(--card);
     border: 1px solid var(--border);
@@ -1150,27 +1155,38 @@
   </div><!-- /mode-hotel-stats -->
 
 
-  <!-- ── Action: Upload DVA & Compare (works with or without validated credentials) ── -->
+  <!-- ── Action: DVA Results (shown as soon as a DVA is added; picks the focus date for Upload & Compare) ── -->
+  <div class="action-card" id="mode-dva">
+    <div class="action-card-hdr">
+      <h2>📊 DVA Results</h2>
+      <p>Drop in the DVA to see which dates passed or failed, then pick a date to focus on — it sets the live API pull range below. The DVA is also used for accuracy scoring when you run Upload &amp; Compare.</p>
+    </div>
+    <div class="drop-grid" style="grid-template-columns:1fr;margin-bottom:0">
+      <div class="drop-zone" id="zone-comp">
+        <input type="file" id="file-comp" accept=".xlsx,.xls"/>
+        <span class="dz-icon">📊</span>
+        <span class="dz-label">DVA File</span>
+        <span class="dz-hint">.xlsx · Duetto Data Validation results</span>
+        <div class="dz-filename" id="name-comp"></div>
+      </div>
+    </div>
+    <div id="dva-card" style="display:none;margin-top:20px">
+      <div id="dva-focus-note" style="display:none;margin-bottom:12px;padding:10px 14px;border-radius:8px;background:var(--bg);font-size:.82rem"></div>
+      <div id="dva-content"></div>
+    </div>
+  </div>
+
+  <!-- ── Action: Upload & Compare (works with or without validated credentials) ── -->
   <div class="action-card" id="mode-analyze">
 
   <!-- Upload section -->
   <div class="action-card-hdr">
-    <h2>🔍 Upload DVA &amp; Compare</h2>
-    <p>Every file below is optional — upload whichever ones you have. A DVA unlocks the full accuracy/discrepancy report; without one, you'll get whatever comparison the files you do upload support (e.g. Bookings vs. Arrivals, or a Folio variance check).</p>
+    <h2>🔍 Upload &amp; Compare</h2>
+    <p>Every file below is optional — upload whichever ones you have. If a DVA was added above, you get the full accuracy/discrepancy report; without one, you'll get whatever comparison the files you do upload support (e.g. Bookings vs. Arrivals, or a Folio variance check).</p>
   </div>
   <div class="upload-card">
 
     <div class="drop-grid">
-      <div class="drop-zone" id="zone-comp">
-        <input type="file" id="file-comp" accept=".xlsx,.xls"/>
-        <span class="dz-optional">Optional</span>
-        <span class="dz-icon">📊</span>
-        <span class="dz-label">DVA File</span>
-        <span class="dz-hint">.xlsx · Duetto Data Validation results</span>
-        <span class="dz-unlocks">Unlocks: full rooms/revenue accuracy scoring &amp; discrepancy root-cause</span>
-        <div class="dz-filename" id="name-comp"></div>
-      </div>
-
       <div class="drop-zone" id="zone-res">
         <input type="file" id="file-res" accept=".tsv,.csv,.txt"/>
         <span class="dz-optional">Optional</span>
@@ -1254,7 +1270,7 @@
           </div>
           <div style="font-size:.68rem;color:var(--muted);margin-top:3px">Both dates inclusive — arrival date range</div>
           <label style="display:flex;align-items:center;gap:6px;margin-top:8px;font-size:.72rem;color:var(--muted);cursor:pointer">
-            <input type="checkbox" id="api-bookings-filter-pseudo-rooms"/>
+            <input type="checkbox" id="api-bookings-filter-pseudo-rooms" checked/>
             Filter Pseudo Rooms <span style="font-weight:400">(PM, PI, POS, PF)</span>
           </label>
           <button type="button" class="oracle-test-btn" id="api-bookings-pull-btn" style="width:100%;margin-top:6px;background:transparent;color:var(--duetto-dark);border:1px solid var(--border-mid)">
@@ -2072,12 +2088,12 @@
         setLastFolioPull(data.records || [], startDate, endDate);
         document.getElementById('browse-folio-pull-note').style.display = 'block';
         document.getElementById('browse-folio-pull-note').textContent =
-          `✓ ${(data.records || []).length} folio record(s) cached — usable for API Folio Comparison in Upload DVA & Compare below.`;
+          `✓ ${(data.records || []).length} folio record(s) cached — usable for API Folio Comparison in Upload & Compare below.`;
       } else if (dataType === 'reservations') {
         setLastBookingsPull(data.records || [], startDate, endDate);
         document.getElementById('browse-bookings-pull-note').style.display = 'block';
         document.getElementById('browse-bookings-pull-note').textContent =
-          `✓ ${(data.records || []).length} reservation(s) cached — usable for API Bookings Comparison in Upload DVA & Compare below.`;
+          `✓ ${(data.records || []).length} reservation(s) cached — usable for API Bookings Comparison in Upload & Compare below.`;
       }
     } catch (e) {
       clearInterval(pollHandle);
@@ -2220,7 +2236,7 @@
     document.getElementById('browse-search-count').textContent = q ? `${shown} of ${rows.length} rows` : '';
   });
 
-  // ══════════════ Live API Folio Pull tile (Upload DVA & Compare) ══════════════
+  // ══════════════ Live API Folio Pull tile (Upload & Compare) ══════════════
   // Sourced from either a "Pull Bookings/Blocks/Folio" run above (data type = Folio)
   // or an inline pull triggered from this tile — either way it's cached here and
   // sent alongside the Duetto Folio Report file when Run Analysis is clicked.
@@ -2280,7 +2296,7 @@
     }
   });
 
-  // ══════════════ Live API Bookings Pull tile (Upload DVA & Compare) ══════════════
+  // ══════════════ Live API Bookings Pull tile (Upload & Compare) ══════════════
   // Mirrors the Folio Pull tile above, but joins on confirmation number
   // against the Duetto Bookings Report instead of day+code buckets.
   let _lastBookingsPull = null; // { records, start, end }
@@ -2392,6 +2408,7 @@
       } else {
         lEl.textContent = ''; lEl.className = 'dz-filename';
       }
+      if (input === 'file-comp') loadDvaPreview(file);
       checkReady();
     });
     zEl.addEventListener('dragover',  e => { e.preventDefault(); zEl.classList.add('drag-over'); });
@@ -2404,6 +2421,7 @@
       const dt = new DataTransfer(); dt.items.add(file); iEl.files = dt.files;
       validateFileInline(file, input, lEl);
       zEl.classList.add('has-file');
+      if (input === 'file-comp') loadDvaPreview(file);
       checkReady();
     });
   });
@@ -2935,61 +2953,188 @@
       return;
     }
 
-    const issueCount = v.mismatch_count + v.api_only_count + v.duetto_only_count;
-    badge.textContent = issueCount ? issueCount : '';
+    const c = v.counts || {};
+    badge.textContent = v.issue_count ? v.issue_count : '';
 
-    const STATUS_LABEL = {
-      matched:     '<span class="badge match">✓ Match</span>',
-      mismatch:    '<span class="badge over">⚠ Mismatch</span>',
-      api_only:    '<span class="badge under">API Only</span>',
-      duetto_only: '<span class="badge under">Duetto Only</span>',
+    const CATEGORY = {
+      cancelled_in_opera: { label: 'Cancelled in Opera', cls: 'over' },
+      room_count_diff:    { label: 'Room Count Differs', cls: 'over' },
+      rate_diff:          { label: 'Rate Differs',       cls: 'over' },
+      opera_only:         { label: 'Opera Only',         cls: 'under' },
+      duetto_only:        { label: 'Duetto Only',        cls: 'under' },
+      matched:            { label: '✓ Match',            cls: 'match' },
     };
+    const ORDER = Object.keys(CATEGORY);
 
-    const rows = v.rows || [];
+    const rows = (v.rows || []).slice().sort((a, b) => ORDER.indexOf(a.category) - ORDER.indexOf(b.category));
     _apiBookingsRows = rows;
-    const rowsHtml = !rows.length
-      ? `<p style="color:var(--muted);font-size:.82rem">No reservations found on either side.</p>`
-      : `<div class="table-outer"><div class="table-scroll table-scroll-capped">
+    const issues = rows.filter(r => r.category !== 'matched');
+    const matches = rows.filter(r => r.category === 'matched');
+
+    const tableHtml = (list) => `<div class="table-outer"><div class="table-scroll table-scroll-capped">
         <table class="rule-codes-table">
           <thead><tr>
-            <th>Confirmation #</th><th>Stay Date</th><th>API Rooms</th><th>API Rate</th><th>Duetto Rooms</th><th>Duetto Rate</th><th>Status</th>
+            <th>Confirmation #</th><th>Room Type</th><th>Opera Stay</th>
+            <th>Opera Status</th><th>Opera Rooms</th><th>Duetto Status</th><th>Duetto Rooms</th>
+            <th>Opera Rate</th><th>Duetto Rate</th><th>Result</th><th>Why</th>
           </tr></thead>
-          <tbody>${rows.map(r => `<tr>
+          <tbody>${list.map(r => `<tr>
             <td>${escHtml(r.confirmation_no)}</td>
-            <td>${escHtml(r.stay_date)}</td>
+            <td>${escHtml(r.room_type || '—')}</td>
+            <td style="white-space:nowrap">${escHtml(r.opera_dates || '—')}</td>
+            <td>${escHtml(r.api_status || '—')}</td>
             <td>${r.api_rooms != null ? r.api_rooms : '—'}</td>
-            <td>${r.api_rate != null ? fmt(r.api_rate) : '—'}</td>
+            <td>${escHtml(r.duetto_status || '—')}</td>
             <td>${r.duetto_rooms != null ? r.duetto_rooms : '—'}</td>
+            <td>${r.api_rate != null ? fmt(r.api_rate) : '—'}</td>
             <td>${r.duetto_rate != null ? fmt(r.duetto_rate) : '—'}</td>
-            <td>${STATUS_LABEL[r.status] || r.status}</td>
+            <td><span class="badge ${CATEGORY[r.category].cls}">${CATEGORY[r.category].label}</span></td>
+            <td style="font-size:.75rem;color:var(--muted)">${escHtml(r.reason || '')}</td>
           </tr>`).join('')}</tbody>
         </table>
       </div></div>`;
 
-    const pseudoNote = v.filter_pseudo_rooms
-      ? 'pseudo rooms (PM, PI, POS, PF) filtered from both sides'
-      : 'pseudo rooms not filtered — toggle on before pulling to exclude PM/PI/POS/PF';
+    const tile = (icon, label, value) =>
+      `<div class="acc-card"><div class="acc-icon">${icon}</div><div><div class="acc-label">${label}</div><div class="acc-value">${value}</div></div></div>`;
+
+    const breakdown = ORDER.filter(k => k !== 'matched' && c[k])
+      .map(k => `${c[k]} × ${CATEGORY[k].label}`).join(', ');
+
+    const notes = [
+      v.filter_pseudo_rooms ? `${v.pseudo_excluded} pseudo room reservation(s) (PM, PI, POS, PF) excluded` : 'Pseudo rooms NOT excluded — Opera count will be overstated',
+      `${v.cancelled_both_excluded} reservation(s) cancelled in both systems excluded`,
+      v.rate_compared ? 'Rates compared for future stay dates only' : 'Rates not compared — historic stay dates use folio-derived rates',
+    ];
 
     content.innerHTML = `
-      <div class="section-label">API Bookings Pull vs. Duetto Bookings Report <span style="font-weight:400;color:var(--muted);text-transform:none;letter-spacing:0">(joined by confirmation # — ${pseudoNote})</span></div>
+      <div class="section-label">Live Opera Reservations vs. Duetto Bookings Report <span style="font-weight:400;color:var(--muted);text-transform:none;letter-spacing:0">(matched by confirmation #)</span></div>
       <div class="accuracy-row">
-        <div class="acc-card"><div class="acc-icon">✓</div><div><div class="acc-label">Matched Reservations</div><div class="acc-value">${v.matched_count}</div></div></div>
-        <div class="acc-card"><div class="acc-icon">⚠</div><div><div class="acc-label">Rooms/Rate Mismatches</div><div class="acc-value">${v.mismatch_count}</div></div></div>
-        <div class="acc-card"><div class="acc-icon">❓</div><div><div class="acc-label">Missing Somewhere</div><div class="acc-value">${v.api_only_count + v.duetto_only_count}</div></div></div>
+        ${tile('🏨', 'Duetto Rooms', v.duetto_total_rooms)}
+        ${tile('🏨', 'Opera Rooms', v.opera_total_rooms)}
+        ${tile(v.room_diff ? '⚠' : '✓', 'Room Difference', (v.room_diff > 0 ? '+' : '') + v.room_diff)}
+        ${tile('✓', 'Matched Reservations', c.matched || 0)}
+        ${tile(v.issue_count ? '⚠' : '✓', 'Reservations to Review', v.issue_count)}
       </div>
+      <p style="font-size:.8rem;margin:10px 0 0">${v.issue_count
+        ? `<strong>Explains the difference:</strong> ${escHtml(breakdown)}.`
+        : 'Every reservation matches.'}</p>
+      <p style="font-size:.72rem;color:var(--muted);margin:4px 0 0">${notes.map(escHtml).join(' · ')}</p>
       <div class="disc-search-row" style="justify-content:space-between;margin-top:20px">
-        <div class="section-label" style="margin:0">Side-by-Side by Confirmation # <span style="font-weight:400;color:var(--muted);text-transform:none;letter-spacing:0">(${rows.length} — includes matches)</span></div>
+        <div class="section-label" style="margin:0">Reservations to Review <span style="font-weight:400;color:var(--muted);text-transform:none;letter-spacing:0">(${issues.length})</span></div>
         <div style="display:flex;gap:8px">
           <button type="button" class="oracle-test-btn" onclick="downloadApiBookingsExport(',', 'csv', 'text/csv')" style="background:transparent;color:var(--duetto-dark);border:1px solid var(--border-mid)">Download CSV</button>
           <button type="button" class="oracle-test-btn" onclick="downloadApiBookingsExport('\\t', 'tsv', 'text/tab-separated-values')" style="background:transparent;color:var(--duetto-dark);border:1px solid var(--border-mid)">Download TSV</button>
         </div>
       </div>
-      ${rowsHtml}
+      ${issues.length ? tableHtml(issues) : '<p style="color:var(--muted);font-size:.82rem">Nothing to review.</p>'}
+      ${matches.length ? `<details style="margin-top:16px"><summary style="cursor:pointer;font-size:.8rem;font-weight:600">Matched Reservations (${matches.length})</summary>${tableHtml(matches)}</details>` : ''}
     `;
   }
 
+  let _dvaRows = [];
+  let _dvaFilter = 'failed';
+  let _dvaHotel = '';
+  function renderDvaTable(rows) {
+    const card = document.getElementById('dva-card');
+    if (!rows || !rows.length) { card.style.display = 'none'; return; }
+    card.style.display = 'block';
+    _dvaRows = rows;
+    const isFail = r => r.commit_status === 'FAIL' || r.revenue_status === 'FAIL';
+    const failed = rows.filter(isFail);
+
+    const list = _dvaFilter === 'failed' ? failed : rows;
+    const statusCell = s => s ? `<span class="badge ${s === 'FAIL' ? 'over' : 'match'}">${escHtml(s)}</span>` : '—';
+    const num = n => n == null || isNaN(n) ? '—' : n;
+    const signed = n => n == null || isNaN(n) ? '—' : (n > 0 ? '+' : '') + n;
+    const filterBtn = (key, label) => `<button type="button" class="oracle-test-btn" onclick="_dvaFilter='${key}';renderDvaTable(_dvaRows)"
+        style="${_dvaFilter === key ? '' : 'background:transparent;color:var(--duetto-dark);border:1px solid var(--border-mid)'}">${label}</button>`;
+    const sum = (k) => rows.reduce((a, r) => a + (r[k] || 0), 0);
+
+    document.getElementById('dva-content').innerHTML = `
+      <div class="section-label">DVA Results${_dvaHotel ? ' — ' + escHtml(_dvaHotel) : ''} <span style="font-weight:400;color:var(--muted);text-transform:none;letter-spacing:0">(TOTAL section)</span></div>
+      <div class="accuracy-row compact">
+        <div class="acc-card"><div class="acc-icon">📅</div><div><div class="acc-label">Dates in DVA</div><div class="acc-value">${rows.length}</div></div></div>
+        <div class="acc-card"><div class="acc-icon">${failed.length ? '⚠' : '✓'}</div><div><div class="acc-label">Failed Dates</div><div class="acc-value">${failed.length}</div></div></div>
+        <div class="acc-card"><div class="acc-icon">🏨</div><div><div class="acc-label">Rooms Fails</div><div class="acc-value">${rows.filter(r => r.commit_status === 'FAIL').length}</div></div></div>
+        <div class="acc-card"><div class="acc-icon">💲</div><div><div class="acc-label">Revenue Fails</div><div class="acc-value">${rows.filter(r => r.revenue_status === 'FAIL').length}</div></div></div>
+      </div>
+      <div class="disc-search-row" style="justify-content:space-between;margin-top:20px">
+        <div style="display:flex;gap:8px">
+          ${filterBtn('failed', `Failed Dates (${failed.length})`)}
+          ${filterBtn('all', `All Dates (${rows.length})`)}
+        </div>
+        <div style="display:flex;gap:8px">
+          <button type="button" class="oracle-test-btn" onclick="downloadDvaExport(',', 'csv', 'text/csv')" style="background:transparent;color:var(--duetto-dark);border:1px solid var(--border-mid)">Download CSV</button>
+          <button type="button" class="oracle-test-btn" onclick="downloadDvaExport('\\t', 'tsv', 'text/tab-separated-values')" style="background:transparent;color:var(--duetto-dark);border:1px solid var(--border-mid)">Download TSV</button>
+        </div>
+      </div>
+      ${!list.length ? '<p style="color:var(--muted);font-size:.82rem">No failed dates — every date passes.</p>' : `
+      <div class="table-outer"><div class="table-scroll table-scroll-capped">
+        <table class="rule-codes-table">
+          <thead><tr>
+            <th>Stay Date</th><th>Period</th>
+            <th>Duetto Rooms</th><th>PMS Rooms</th><th>Room Diff</th><th>Rooms Status</th>
+            <th>Duetto Revenue</th><th>PMS Revenue</th><th>Revenue Diff</th><th>Revenue Status</th><th></th>
+          </tr></thead>
+          <tbody>${list.map(r => `<tr style="${r.stay_date === _dvaFocusDate ? 'background:rgba(200,230,80,.25);font-weight:600' : isFail(r) ? 'background:rgba(155,28,46,.04)' : ''}">
+            <td style="white-space:nowrap">${escHtml(r.stay_date)}</td>
+            <td>${escHtml(r.period === 'HISTORIC' ? 'Historic' : 'Future')}</td>
+            <td>${num(r.duetto_rooms)}</td><td>${num(r.pms_rooms)}</td><td>${signed(r.room_diff)}</td>
+            <td>${statusCell(r.commit_status)}</td>
+            <td>${fmt(r.duetto_revenue)}</td><td>${fmt(r.pms_revenue)}</td><td>${r.revenue_diff > 0 ? '+' : ''}${fmt(r.revenue_diff)}</td>
+            <td>${statusCell(r.revenue_status)}</td>
+            <td><button type="button" class="oracle-test-btn" onclick="useDvaDate('${escHtml(r.stay_date)}')"
+                style="padding:4px 10px;font-size:.72rem;white-space:nowrap;${r.stay_date === _dvaFocusDate ? '' : 'background:transparent;color:var(--duetto-dark);border:1px solid var(--border-mid)'}">${r.stay_date === _dvaFocusDate ? '✓ Focused' : 'Focus'}</button></td>
+          </tr>`).join('')}</tbody>
+        </table>
+      </div></div>`}
+    `;
+  }
+  let _dvaFocusDate = null;
+  function useDvaDate(date) {
+    _dvaFocusDate = date;
+    ['api-bookings-pull-start', 'api-bookings-pull-end', 'api-folio-pull-start', 'api-folio-pull-end']
+      .forEach(id => { const el = document.getElementById(id); if (el) el.value = date; });
+    renderDvaTable(_dvaRows);
+    const r = _dvaRows.find(x => x.stay_date === date) || {};
+    const note = document.getElementById('dva-focus-note');
+    note.style.display = 'block';
+    note.innerHTML = `<strong>Focused on ${escHtml(date)}</strong> — Rooms ${escHtml(r.commit_status || '—')} (${r.room_diff > 0 ? '+' : ''}${r.room_diff ?? '—'}),
+      Revenue ${escHtml(r.revenue_status || '—')} (${r.revenue_diff > 0 ? '+' : ''}${fmt(r.revenue_diff)}).
+      Live API Bookings and Folio pull ranges below are set to this date.
+      <a href="#" onclick="document.getElementById('mode-analyze').scrollIntoView({behavior:'smooth'});return false">Go to Upload &amp; Compare ↓</a>`;
+  }
+
+  async function loadDvaPreview(file) {
+    const content = document.getElementById('dva-content');
+    _dvaFocusDate = null;
+    document.getElementById('dva-focus-note').style.display = 'none';
+    if (!file) { _dvaRows = []; renderDvaTable([]); return; }
+    document.getElementById('dva-card').style.display = 'block';
+    content.innerHTML = '<p style="color:var(--muted);font-size:.82rem">Reading DVA…</p>';
+    const fd = new FormData();
+    fd.append('dva', file);
+    try {
+      const res = await fetch('/dva_preview', { method: 'POST', body: fd });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Could not read DVA file.');
+      _dvaHotel = data.hotel_name || '';
+      _dvaFilter = 'failed';
+      renderDvaTable(data.rows);
+    } catch (e) {
+      content.innerHTML = `<p style="color:#9B1C2E;font-size:.82rem">${escHtml(e.message)}</p>`;
+    }
+  }
+
+  const DVA_EXPORT_COLUMNS = ['stay_date', 'period', 'duetto_rooms', 'pms_rooms', 'room_diff', 'commit_status', 'duetto_revenue', 'pms_revenue', 'revenue_diff', 'revenue_status'];
+  function downloadDvaExport(delim, ext, mime) {
+    const list = _dvaFilter === 'failed'
+      ? _dvaRows.filter(r => r.commit_status === 'FAIL' || r.revenue_status === 'FAIL') : _dvaRows;
+    downloadDelimited(list, DVA_EXPORT_COLUMNS, 'dqe_dva_' + _dvaFilter, delim, ext, mime);
+  }
+
   let _apiBookingsRows = [];
-  const API_BOOKINGS_EXPORT_COLUMNS = ['confirmation_no', 'stay_date', 'api_rooms', 'api_rate', 'duetto_rooms', 'duetto_rate', 'status'];
+  const API_BOOKINGS_EXPORT_COLUMNS = ['confirmation_no', 'room_type', 'opera_dates', 'api_status', 'api_rooms', 'duetto_status', 'duetto_rooms', 'api_rate', 'duetto_rate', 'category', 'reason'];
   function downloadApiBookingsExport(delim, ext, mime) {
     downloadDelimited(_apiBookingsRows, API_BOOKINGS_EXPORT_COLUMNS, 'dqe_api_bookings_comparison', delim, ext, mime);
   }
