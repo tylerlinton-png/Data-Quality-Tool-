@@ -1711,7 +1711,7 @@ SYNC_JOB_POLL_TIMEOUT = 240
 SYNC_FINDER_MAX_DAYS = 31
 SYNC_FINDER_KNOWN_ERRORS = {
     'ORA-02290': 'Unsupported special character ( " | \\ / [ ] ) in a reservation or profile field.',
-    'ORA-01722': 'A Room Category holds an alpha-numeric value where Opera expects a number.',
+    'ORA-01722': 'A Room Category holds letters where Opera expects a number — usually an orphan row left by a deleted pseudo-room (PM) reservation.',
 }
 ORA_01722_ROOM_FIELDS = ['roomStay.roomType', 'roomStay.roomClass', 'roomStay.roomTypeCharged']
 
@@ -1801,6 +1801,19 @@ def check_daily_summary_ora_02290(reservations):
     return hits
 
 
+def parse_ora_01722_detail(error_raw):
+    """Newer Oracle versions name the column and value in the message (ORA-01722 / ORA-03302)."""
+    text = (error_raw or '').replace('\\"', '"').replace("\\'", "'")
+    out = {}
+    m = re.search(r"containing\s+'([^']*)'\s+to\s+a\s+number:\s*([A-Za-z0-9_.$\"]+)", text)
+    if m:
+        out['char'], out['column'] = m.group(1), m.group(2).strip('"')
+    m = re.search(r'invalid string value:\s*([^"\n\\]+)', text)
+    if m:
+        out['value'] = m.group(1).strip()
+    return out
+
+
 def run_sync_error_finder(hostname, access_token, app_key, enterprise_id, hotel_id, ext_system_code,
                           start_date, end_date, report=lambda msg: None):
     start = datetime.date.fromisoformat(start_date)
@@ -1852,6 +1865,35 @@ def run_sync_error_finder(hostname, access_token, app_key, enterprise_id, hotel_
                                day.isoformat(), day.isoformat(), ext_system_code=ext_system_code)
         entry = {'date': day.isoformat(), 'ora': res['ora'], 'error_raw': res['error_raw']}
         if res['ora'] == 'ORA-01722':
+            detail = parse_ora_01722_detail(res['error_raw'])
+            entry['detail'] = detail
+            if detail.get('value'):
+                entry['hits'] = [
+                    {'confirmation_no': _prep_reservation_for_display(rec).get('_confirmationNo', ''),
+                     'field': _humanize_column(path), 'value': v, 'characters': detail.get('char', '')}
+                    for rec in raw for path, v in _iter_string_fields(rec) if v == detail['value']
+                ]
+            if not entry.get('hits'):
+                # Opera stores room type as a numeric Room Category behind the code (ROOM_CATEGORY_LABEL).
+                # A code that isn't a configured room type can't resolve to that number.
+                try:
+                    configured = {str(r.get('code', '')).strip().upper() for r in fetch_oracle_raw(
+                        'room_types', hostname, access_token, app_key, enterprise_id, hotel_id,
+                        ext_system_code=ext_system_code)}
+                except Exception:
+                    configured = set()
+                entry['configured_room_types'] = len(configured)
+                if configured:
+                    entry['hits'] = []
+                    for rec in raw:
+                        conf = _prep_reservation_for_display(rec).get('_confirmationNo', '')
+                        for f in ('roomStay.roomType', 'roomStay.roomTypeCharged'):
+                            node = rec
+                            for k in f.split('.'):
+                                node = node.get(k) if isinstance(node, dict) else None
+                            if isinstance(node, str) and node.strip() and node.strip().upper() not in configured:
+                                entry['hits'].append({'confirmation_no': conf, 'field': _humanize_column(f),
+                                                      'value': node, 'characters': 'not a configured room type'})
             rows, _, _ = format_records_for_display('reservations', raw)
             entry['room_fields'] = [{
                 'confirmation_no': r.get('_confirmationNo', ''),

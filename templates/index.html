@@ -2196,10 +2196,17 @@
 
     const dayBlocks = r.failing_days.map(f => {
       let body;
-      if (f.ora === 'ORA-01722') {
-        body = `<p style="font-size:.78rem;color:var(--muted)">The exact Room Category field isn't identified yet — compare the room values below and look for the odd one out.</p>
+      if (f.ora === 'ORA-01722' && f.detail && f.detail.column) {
+        body = `<p style="font-size:.8rem">Opera rejected <code>${escHtml(f.detail.column)}</code>${f.detail.value ? ` with value <code>${escHtml(f.detail.value)}</code>` : ''}${f.detail.char ? ` (bad character <code>${escHtml(f.detail.char)}</code>)` : ''}.</p>
+          ${f.hits && f.hits.length ? syncHitsTable(f.hits) : '<p style="font-size:.78rem;color:var(--muted)">No reservation on this day has that exact value in the fields the API returns — search for it in Opera.</p>'}`;
+      } else if (f.ora === 'ORA-01722' && f.hits && f.hits.length) {
+        body = `<p style="font-size:.8rem">These reservations use a room type code that isn't configured at the hotel:</p>${syncHitsTable(f.hits)}`;
+      } else if (f.ora === 'ORA-01722') {
+        body = `<p style="font-size:.8rem">The bad row isn't visible through the API. In past cases it was an orphan row from a <strong>deleted PM / pseudo-room reservation</strong> with a non-numeric Room Category (e.g. "PSE").</p>
+          <p style="font-size:.8rem;margin-top:6px">Escalate to Oracle Support: hotel ${escHtml(_syncErrorsResult.hotel_id)}, failing date ${escHtml(f.date)}, Async Daily Summary returns ORA-01722. Reference KA DOC12856 / HOPCS-62399 and ask them to run the PM orphan row cleanup script.</p>
+          <details style="margin-top:8px"><summary style="cursor:pointer;font-size:.78rem">Room values on this day</summary>
           <div style="overflow-x:auto"><table class="rule-codes-table"><thead><tr><th>Confirmation #</th><th>Room Type</th><th>Room Class</th><th>Room Type Charged</th></tr></thead>
-          <tbody>${(f.room_fields || []).map(x => `<tr><td>${escHtml(x.confirmation_no)}</td><td>${escHtml(x.roomType)}</td><td>${escHtml(x.roomClass)}</td><td>${escHtml(x.roomTypeCharged)}</td></tr>`).join('')}</tbody></table></div>`;
+          <tbody>${(f.room_fields || []).map(x => `<tr><td>${escHtml(x.confirmation_no)}</td><td>${escHtml(x.roomType)}</td><td>${escHtml(x.roomClass)}</td><td>${escHtml(x.roomTypeCharged)}</td></tr>`).join('')}</tbody></table></div></details>`;
       } else if (f.hits && f.hits.length) {
         body = syncHitsTable(f.hits);
       } else {
@@ -2232,6 +2239,7 @@
     const lines = [`Sync Error Finder — ${r.hotel_id}`, `${r.ora}: ${r.explanation}`,
       `Failing date(s): ${r.failing_days.map(f => f.date).join(', ')}`];
     _syncErrorRows().forEach(h => lines.push(`${h.date} · Conf ${h.confirmation_no} · ${h.field} · "${h.characters}" · ${h.value}`));
+    if (r.ora === 'ORA-01722') lines.push('Likely cause: orphan row from a deleted PM/pseudo-room reservation (non-numeric Room Category). Ref KA DOC12856 / HOPCS-62399 — please run the PM orphan row cleanup script.');
     lines.push('', 'Raw error:', r.error_raw);
     navigator.clipboard.writeText(lines.join('\n'));
   }
