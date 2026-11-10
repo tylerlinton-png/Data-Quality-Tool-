@@ -1711,7 +1711,7 @@ SYNC_JOB_POLL_TIMEOUT = 240
 SYNC_FINDER_MAX_DAYS = 31
 SYNC_FINDER_KNOWN_ERRORS = {
     'ORA-02290': 'Unsupported special character ( " | \\ / [ ] ) in a reservation or profile field.',
-    'ORA-01722': 'A Room Category holds letters where Opera expects a number — usually an orphan row left by a deleted pseudo-room (PM) reservation.',
+    'ORA-01722': 'A reservation row has a non-numeric value in its Room Category, where Opera expects a number.',
 }
 ORA_01722_ROOM_FIELDS = ['roomStay.roomType', 'roomStay.roomClass', 'roomStay.roomTypeCharged']
 
