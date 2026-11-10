@@ -6,7 +6,7 @@
 <title>DQE — Duetto Data Quality Engine</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root {
     --duetto-green:  #C4FF45;
@@ -72,11 +72,9 @@
     background: rgba(196,255,69,.15);
     color: var(--duetto-green);
     font-size: .7rem;
-    font-weight: 700;
-    letter-spacing: .08em;
-    text-transform: uppercase;
+    font-weight: 600;
     padding: 3px 8px;
-    border-radius: 4px;
+    border-radius: 6px;
     border: 1px solid rgba(196,255,69,.3);
     margin-left: 2px;
   }
@@ -95,7 +93,7 @@
   }
 
   /* ── Page shell ── */
-  .page { max-width: 900px; margin: 0 auto; padding: 32px 24px; }
+  .page { max-width: 1200px; margin: 0 auto; padding: 32px 24px; }
 
   /* ── Credential card + validated-state gating ── */
   .cred-status-row {
@@ -114,7 +112,7 @@
     border: 1px solid var(--border-mid); border-radius: 8px; background: #fff; color: var(--text); width: 100%;
   }
   .cred-status-badge {
-    font-size: .78rem; font-weight: 700; padding: 5px 12px; border-radius: 999px;
+    font-size: .78rem; font-weight: 600; padding: 5px 12px; border-radius: 16px;
   }
   .cred-status-badge.ok { background: var(--green-bg); color: #166534; }
   .cred-status-badge.error { background: var(--red-bg); color: #9B1C2E; }
@@ -123,14 +121,14 @@
   .action-cards { display: flex; flex-direction: column; gap: 20px; }
   .action-card {
     background: var(--card); border: 1px solid var(--border); border-radius: 16px;
-    padding: 24px 28px; box-shadow: 0 1px 4px rgba(0,0,0,.06), 0 4px 16px rgba(0,0,0,.04);
+    padding: 24px 28px; box-shadow: 0 1px 2px rgba(14,33,36,.04);
   }
   .action-card.locked { opacity: .5; pointer-events: none; }
   .action-card-hdr { margin-bottom: 16px; }
-  .action-card-hdr h2 { font-size: 1.1rem; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+  .action-card-hdr h2 { font-size: 1.1rem; font-weight: 600; color: var(--text); margin-bottom: 4px; }
   .action-card-hdr p { color: var(--muted); font-size: .84rem; }
   .action-card-lock-note {
-    font-size: .76rem; color: var(--muted); font-style: italic; margin-top: 8px;
+    font-size: .76rem; color: var(--muted); margin-top: 8px;
   }
 
   /* ── Upload section ── */
@@ -139,7 +137,7 @@
   }
   .upload-header h1 {
     font-size: 1.4rem;
-    font-weight: 700;
+    font-weight: 600;
     color: var(--text);
     margin-bottom: 4px;
   }
@@ -153,24 +151,24 @@
     border: 1px solid var(--border);
     border-radius: 16px;
     padding: 28px;
-    box-shadow: 0 1px 4px rgba(0,0,0,.06), 0 4px 16px rgba(0,0,0,.04);
+    box-shadow: 0 1px 2px rgba(14,33,36,.04);
     margin-bottom: 28px;
   }
 
   .drop-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-    gap: 14px;
+    gap: 16px;
     margin-bottom: 24px;
   }
 
   .drop-zone {
     border: 1.5px dashed var(--border-mid);
     border-radius: 12px;
-    padding: 22px 16px 18px;
+    padding: 20px 16px;
     text-align: center;
     cursor: pointer;
-    transition: all .2s;
+    transition: border-color .15s, background-color .15s;
     position: relative;
     background: #FAFBFC;
   }
@@ -207,29 +205,29 @@
   .drop-zone .dz-required {
     display: inline-block;
     font-size: .65rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: .06em;
+    font-weight: 600;
     background: #FEF3C7;
     color: #92400E;
     border: 1px solid #FDE68A;
-    border-radius: 4px;
+    border-radius: 6px;
     padding: 1px 6px;
     margin-bottom: 6px;
   }
   .drop-zone .dz-optional {
     display: inline-block;
     font-size: .65rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: .06em;
+    font-weight: 600;
     background: #F1F5F9;
     color: var(--muted);
     border: 1px solid var(--border);
-    border-radius: 4px;
+    border-radius: 6px;
     padding: 1px 6px;
     margin-bottom: 6px;
   }
+  @media (min-width: 1000px) {
+    #zone-api-folio-pull, #zone-api-bookings-pull { grid-column: span 2; }
+  }
+  .drop-zone input[type=date], .drop-zone input[type=text] { min-width: 0; }
   .drop-zone .dz-filename {
     font-size: .72rem;
     color: var(--green-ok);
@@ -247,7 +245,7 @@
     border-radius: 8px;
     padding: 8px 18px;
     font-size: .8rem;
-    font-weight: 700;
+    font-weight: 600;
     cursor: pointer;
   }
   .oracle-test-btn:hover { background: var(--duetto-mid); }
@@ -268,17 +266,15 @@
     background: var(--duetto-green);
     color: var(--duetto-dark);
     border: none;
-    border-radius: 10px;
+    border-radius: 8px;
     font-size: .95rem;
-    font-weight: 700;
+    font-weight: 600;
     cursor: pointer;
     transition: background .2s, transform .1s;
-    letter-spacing: .01em;
   }
-  .run-btn:hover:not(:disabled) {
-    background: #AADE30;
-    transform: translateY(-1px);
-  }
+  .run-btn:hover:not(:disabled) { background: var(--accent-dim); }
+  .run-btn:active:not(:disabled) { transform: scale(.98); }
+  button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--duetto-dark); outline-offset: 2px; }
   .run-btn:disabled {
     background: var(--border-mid);
     color: var(--muted);
@@ -309,7 +305,7 @@
     background: var(--red-bg);
     border: 1px solid var(--red);
     color: #9B1C2E;
-    border-radius: 10px;
+    border-radius: 8px;
     padding: 16px 20px;
     margin-top: 16px;
     font-size: .875rem;
@@ -321,7 +317,7 @@
 
   .report-header {
     background: var(--duetto-dark);
-    border-radius: 14px;
+    border-radius: 12px;
     padding: 24px 28px;
     margin-bottom: 24px;
     color: #fff;
@@ -333,7 +329,7 @@
   }
   .report-header h2 {
     font-size: 1.1rem;
-    font-weight: 700;
+    font-weight: 600;
     color: #fff;
     margin-bottom: 4px;
   }
@@ -367,14 +363,14 @@
     padding: 18px 24px;
     min-width: 200px;
     flex: 1;
-    box-shadow: 0 1px 3px rgba(0,0,0,.05);
     display: flex;
     align-items: center;
     gap: 16px;
   }
-  .acc-card .acc-icon {
+  .acc-card .acc-icon { display: none; }
+  .acc-card .acc-icon-unused {
     width: 44px; height: 44px;
-    border-radius: 10px;
+    border-radius: 8px;
     display: flex; align-items: center; justify-content: center;
     font-size: 1.3rem;
     flex-shrink: 0;
@@ -385,14 +381,13 @@
   .acc-card .acc-label {
     font-size: .72rem;
     color: var(--muted);
-    text-transform: uppercase;
-    letter-spacing: .06em;
     font-weight: 600;
     margin-bottom: 2px;
   }
   .acc-card .acc-value {
-    font-size: 1.7rem;
-    font-weight: 800;
+    font-size: 1.75rem;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
     line-height: 1;
   }
   .acc-card.good .acc-value { color: var(--green-ok); }
@@ -407,9 +402,7 @@
   /* ── Section title ── */
   .section-label {
     font-size: .7rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: .1em;
+    font-weight: 600;
     color: var(--muted);
     margin: 28px 0 12px;
     display: flex;
@@ -434,6 +427,7 @@
   .table-scroll-capped { max-height: 480px; overflow-y: auto; }
   .readiness-table-scroll-capped { max-height: 260px; overflow-y: auto; }
   table {
+    font-variant-numeric: tabular-nums;
     width: 100%;
     border-collapse: collapse;
     font-size: .8rem;
@@ -442,9 +436,7 @@
   thead tr.th-group th {
     padding: 10px 14px;
     font-size: .68rem;
-    font-weight: 700;
-    letter-spacing: .07em;
-    text-transform: uppercase;
+    font-weight: 600;
     text-align: center;
     color: rgba(255,255,255,.9);
   }
@@ -482,9 +474,9 @@
     align-items: center;
     gap: 4px;
     padding: 3px 9px;
-    border-radius: 20px;
+    border-radius: 6px;
     font-size: .68rem;
-    font-weight: 700;
+    font-weight: 600;
     white-space: nowrap;
   }
   .badge.over    { background: var(--red-bg);    color: #9B1C2E; }
@@ -500,14 +492,14 @@
     border-radius: 6px;
     padding: 2px 8px;
     font-size: .68rem;
-    font-weight: 700;
+    font-weight: 600;
     color: #475569;
     font-family: 'SF Mono', 'Fira Code', monospace;
     white-space: nowrap;
   }
 
-  .diff-neg { color: var(--red);    font-weight: 700; }
-  .diff-pos { color: var(--green-ok); font-weight: 700; }
+  .diff-neg { color: var(--red);    font-weight: 600; }
+  .diff-pos { color: var(--green-ok); font-weight: 600; }
 
   .contrib-text {
     font-size: .72rem;
@@ -529,7 +521,7 @@
     border-radius: 6px;
     padding: 2px 7px;
     font-size: .68rem;
-    font-weight: 700;
+    font-weight: 600;
     color: #5B21B6;
     margin-bottom: 4px;
   }
@@ -541,15 +533,15 @@
     gap: 10px;
   }
   /* Arrivals cross-reference */
-  .xref-title { font-size:1rem; font-weight:700; color:var(--duetto-dark); margin:0 0 4px; }
+  .xref-title { font-size:1rem; font-weight: 600; color:var(--duetto-dark); margin:0 0 4px; }
   .xref-subtitle { font-size:.8rem; color:var(--muted); margin:0 0 12px; }
   .xref-summary { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:16px; }
-  .xref-badge { padding:6px 14px; border-radius:6px; font-size:.82rem; font-weight:600; }
+  .xref-badge { padding:6px 14px; border-radius: 6px; font-size:.82rem; font-weight:600; }
   .xref-badge-red   { background:#fee2e2; color:#b91c1c; border:1px solid #fca5a5; }
   .xref-badge-amber { background:#fef3c7; color:#c2740a; border:1px solid #fcd34d; }
   .xref-badge-blue  { background:#dbeafe; color:#1d4ed8; border:1px solid #93c5fd; }
   .xref-badge-green { background:#dcfce7; color:#166534; border:1px solid #86efac; }
-  .xref-section-hdr { font-size:.8rem; font-weight:700; text-transform:uppercase; letter-spacing:.05em;
+  .xref-section-hdr { font-size:.8rem; font-weight: 600;
                       padding:6px 12px; margin:0; }
   .xref-hdr-red   { background:#fee2e2; color:#b91c1c; }
   .xref-hdr-amber { background:#fef3c7; color:#b45309; }
@@ -582,9 +574,7 @@
     background: #F8FAFC;
     border-bottom: 2px solid var(--border);
     font-size: .72rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: .06em;
+    font-weight: 600;
     color: var(--text-mid);
   }
   .recon-table td {
@@ -618,7 +608,7 @@
   .rec-code {
     font-family: 'SF Mono', 'Fira Code', monospace;
     font-size: .72rem;
-    font-weight: 700;
+    font-weight: 600;
     color: var(--duetto-dark);
     background: var(--duetto-green);
     border-radius: 6px;
@@ -639,7 +629,7 @@
     background: #1D6F42;
     color: #fff;
     border: none;
-    border-radius: 9px;
+    border-radius: 8px;
     font-size: .875rem;
     font-weight: 600;
     cursor: pointer;
@@ -657,7 +647,7 @@
     background: var(--duetto-dark);
     color: var(--duetto-green);
     border: 1.5px solid var(--duetto-green);
-    border-radius: 9px;
+    border-radius: 8px;
     font-size: .875rem;
     font-weight: 600;
     cursor: pointer;
@@ -688,7 +678,7 @@
   }
   .modal-box h3 {
     font-size: 1.1rem;
-    font-weight: 700;
+    font-weight: 600;
     margin-bottom: 4px;
     color: var(--text);
   }
@@ -711,17 +701,16 @@
   .rule-codes-table th {
     text-align: left; background: var(--duetto-dark); color: #fff;
     padding: 8px 10px; position: sticky; top: 0; font-size: .72rem;
-    text-transform: uppercase; letter-spacing: .04em;
   }
   .rule-codes-table td { padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
   .rule-codes-table tr:hover td { background: #FAFBFC; }
   .rule-codes-table .code-pill {
-    display: inline-block; font-family: 'Courier New', monospace; font-weight: 700;
-    background: #EEF2FF; color: #3730A3; padding: 2px 7px; border-radius: 5px; font-size: .75rem;
+    display: inline-block; font-family: 'Courier New', monospace; font-weight: 600;
+    background: #EEF2FF; color: #3730A3; padding: 2px 7px; border-radius: 6px; font-size: .75rem;
   }
   .rule-codes-table .run-link {
     background: var(--duetto-dark); color: var(--duetto-green);
-    border: none; border-radius: 6px; padding: 5px 10px; font-size: .74rem; font-weight: 700; cursor: pointer;
+    border: none; border-radius: 6px; padding: 5px 10px; font-size: .74rem; font-weight: 600; cursor: pointer;
   }
   .rule-codes-table .run-link:hover { background: var(--duetto-mid); }
 
@@ -731,16 +720,16 @@
     padding: 18px 20px; margin-bottom: 14px;
   }
   .readiness-card-hdr { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
-  .readiness-card-title { font-weight: 700; font-size: .95rem; color: var(--text); }
+  .readiness-card-title { font-weight: 600; font-size: .95rem; color: var(--text); }
   .readiness-badge {
-    font-size: .72rem; font-weight: 700; padding: 3px 10px; border-radius: 20px;
+    font-size: .72rem; font-weight: 600; padding: 3px 10px; border-radius: 16px;
   }
   .readiness-badge.ok { background: var(--green-bg); color: #166534; }
   .readiness-badge.error { background: var(--red-bg); color: #9B1C2E; }
   .readiness-preview-table { width: 100%; border-collapse: collapse; font-size: .78rem; }
   .readiness-preview-table th {
     text-align: left; background: #F3F6F2; color: var(--text-mid);
-    padding: 6px 8px; font-size: .68rem; text-transform: uppercase; letter-spacing: .03em;
+    padding: 6px 8px; font-size: .68rem;
   }
   .readiness-preview-table td { padding: 6px 8px; border-bottom: 1px solid var(--border); }
 
@@ -748,6 +737,14 @@
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
     gap: 14px 16px;
+  }
+  .browse-conn-grid .span-2 { grid-column: span 2; }
+  @media (max-width: 640px) {
+    .browse-conn-grid .span-2 { grid-column: auto; }
+    .page { padding: 24px 16px; }
+    .action-card, .upload-card { padding: 20px 16px; }
+    nav { padding: 0 16px; }
+    .nav-right { display: none; }
   }
   .browse-conn-grid label {
     font-size: .72rem; font-weight: 600; color: var(--text-mid);
@@ -761,14 +758,14 @@
 
   .auth-type-toggle { display: flex; gap: 0; border: 1px solid var(--border-mid); border-radius: 8px; overflow: hidden; width: fit-content; }
   .auth-type-btn {
-    background: #fff; border: none; padding: 8px 16px; font-size: .8rem; font-weight: 700;
+    background: #fff; border: none; padding: 8px 16px; font-size: .8rem; font-weight: 600;
     color: var(--text-mid); cursor: pointer;
   }
   .auth-type-btn.active { background: var(--duetto-dark); color: var(--duetto-green); }
 
   .appkey-preset-btn {
     background: var(--card); border: 1px solid var(--border-mid); color: var(--text-mid);
-    font-size: .72rem; font-weight: 700; padding: 8px 10px; border-radius: 6px; cursor: pointer; white-space: nowrap;
+    font-size: .72rem; font-weight: 600; padding: 8px 10px; border-radius: 6px; cursor: pointer; white-space: nowrap;
   }
   .appkey-preset-btn:hover { border-color: var(--duetto-green); }
 
@@ -787,7 +784,7 @@
   .result-tab.active { color: var(--duetto-dark); border-bottom-color: var(--duetto-green); }
   .result-tab-badge {
     display: inline-block; background: var(--red-bg); color: var(--red);
-    font-size: .68rem; font-weight: 700; padding: 1px 6px; border-radius: 10px; margin-left: 4px;
+    font-size: .68rem; font-weight: 600; padding: 1px 6px; border-radius: 8px; margin-left: 4px;
   }
   .disc-search-row { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
   .disc-search-row input {
@@ -799,9 +796,8 @@
   #disc-tbody tr.search-hidden { display: none; }
 
   .dz-unlocks {
-    display: block; font-size: .68rem; color: var(--duetto-green);
-    background: var(--duetto-dark); border-radius: 5px; padding: 3px 7px;
-    margin-top: 6px; pointer-events: none; font-weight: 600;
+    display: block; font-size: .72rem; color: var(--text-mid);
+    margin-top: 8px; pointer-events: none; line-height: 1.4;
   }
   .dz-filename.valid::before { content: "✓ "; color: var(--green-ok); }
   .dz-filename.invalid { color: var(--amber); }
@@ -836,8 +832,6 @@
     font-weight: 600;
     color: var(--text-mid);
     margin-bottom: 5px;
-    text-transform: uppercase;
-    letter-spacing: .04em;
   }
   .form-row input, .form-row textarea {
     width: 100%;
@@ -884,7 +878,7 @@
     border: none;
     border-radius: 8px;
     font-size: .875rem;
-    font-weight: 700;
+    font-weight: 600;
     cursor: pointer;
     transition: opacity .2s;
   }
@@ -905,8 +899,8 @@
     <img src="/static/duetto-logo.png" alt="Duetto" class="nav-logo-img"/>
     <span class="nav-badge">DQE</span>
   </a>
-  <button class="nav-link-btn" id="nav-app-feedback-btn" type="button">💬 Feedback</button>
-  <button class="nav-link-btn" id="nav-whoami-btn" type="button" style="display:none">👤 <span id="nav-whoami-label"></span></button>
+  <button class="nav-link-btn" id="nav-app-feedback-btn" type="button">Feedback</button>
+  <button class="nav-link-btn" id="nav-whoami-btn" type="button" style="display:none"><span id="nav-whoami-label"></span></button>
   <span class="nav-right" id="today-label"></span>
 </nav>
 
@@ -920,6 +914,7 @@
         <option value="DQE">DQE</option>
         <option value="Deployment">Deployment</option>
         <option value="Migrations">Migrations</option>
+        <option value="Support">Support</option>
         <option value="Other">Other</option>
       </select>
     </div>
@@ -956,8 +951,8 @@
     </div>
 
     <div id="app-feedback-success-content" class="modal-success" style="display:none">
-      <div class="success-icon">✅</div>
-      <h3>Submitted!</h3>
+      
+      <h3>Submitted</h3>
       <p>Your feedback has been posted to the <strong>DQE Feedback</strong> board on Monday.com.</p>
       <div class="modal-actions" style="justify-content:center; margin-top:16px;">
         <button class="modal-cancel" onclick="closeAppFeedbackModal()">Close</button>
@@ -972,7 +967,7 @@
   <!-- ══════════════ STEP 1 — OHIP CREDENTIALS ══════════════ -->
   <div class="upload-header">
     <h1>Data Quality Engine</h1>
-    <p>Enter your Oracle OHIP credentials and validate the connection — this unlocks the actions below. All three actions share these credentials, so you only enter them once.</p>
+    <p>Enter your Oracle OHIP credentials and validate the connection — every tool below uses this one connection.</p>
   </div>
   <div class="upload-card">
     <div class="saved-connections-row">
@@ -981,8 +976,8 @@
           <option value="">— Load a saved connection —</option>
         </select>
       </label>
-      <button type="button" class="oracle-test-btn" id="save-connection-btn" style="background:transparent;color:var(--duetto-dark);border:1px solid var(--border-mid)">💾 Save As New</button>
-      <button type="button" class="oracle-test-btn" id="delete-connection-btn" style="background:transparent;color:#9B1C2E;border:1px solid var(--border-mid);display:none">🗑 Delete</button>
+      <button type="button" class="oracle-test-btn" id="save-connection-btn" style="background:transparent;color:var(--duetto-dark);border:1px solid var(--border-mid)">Save As New</button>
+      <button type="button" class="oracle-test-btn" id="delete-connection-btn" style="background:transparent;color:#9B1C2E;border:1px solid var(--border-mid);display:none">Delete</button>
     </div>
     <div class="browse-conn-grid">
       <label>Auth Type
@@ -1001,9 +996,9 @@
         <input type="text" id="cred-hostname" placeholder="e.g. mtce16pr.hospitality-api.eu-frankfurt-1.ocs.oraclecloud.com"/>
       </label>
       <label>Hotel ID <span style="font-weight:400;color:var(--muted)">(case-sensitive — auto-uppercased)</span>
-        <input type="text" id="cred-hotel-id" placeholder="e.g. RIVERLEE" style="text-transform:uppercase"/>
+        <input type="text" id="cred-hotel-id" placeholder="e.g. RIVERLEE" style=""/>
       </label>
-      <label style="grid-column:span 2">App Key
+      <label class="span-2">App Key
         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
           <input type="text" id="cred-app-key" style="flex:1;min-width:160px"/>
           <button type="button" class="appkey-preset-btn" id="cred-appkey-prod-btn">Prod</button>
@@ -1047,7 +1042,7 @@
   <!-- ── Action: Pull Bookings / Blocks / Folio for a day ── -->
   <div class="action-card locked" id="mode-browse">
     <div class="action-card-hdr">
-      <h2>📡 Pull Bookings / Blocks / Folio</h2>
+      <h2>Pull Bookings / Blocks / Folio</h2>
       <p>Pull raw reservations, blocks, or folio data for a date range — no DVA file or comparison needed.</p>
       <div class="action-card-lock-note" id="browse-lock-note">Validate your credentials above to unlock this.</div>
     </div>
@@ -1079,6 +1074,7 @@
     <div id="browse-bookings-pull-note" style="display:none;margin-top:10px;font-size:.78rem;color:var(--muted)"></div>
 
     <div id="browse-results" style="display:none;margin-top:20px">
+      <div id="browse-ora-check"></div>
       <div class="section-label">
         Results <span id="browse-results-count" style="font-weight:400;color:var(--muted);text-transform:none;letter-spacing:0"></span>
       </div>
@@ -1106,10 +1102,37 @@
     </div>
   </div><!-- /mode-browse -->
 
+  <!-- ── Action: Sync Error Finder (Support) ── -->
+  <div class="action-card locked" id="mode-sync-errors">
+    <div class="action-card-hdr">
+      <h2>Sync Error Finder</h2>
+      <p>Find the reservation behind ORA-02290 / ORA-01722 sync failures. Re-runs the same Async Daily Summary call Duetto's integration uses, narrows it to the failing day, then shows the record and field causing it.</p>
+      <div class="action-card-lock-note" id="sync-errors-lock-note">Validate your credentials above to unlock this.</div>
+    </div>
+
+    <div class="browse-conn-grid">
+      <label>Start Date <span style="font-weight:400;color:var(--muted)">(from the failed job)</span>
+        <input type="date" id="sync-errors-start-date"/>
+      </label>
+      <label>End Date <span style="font-weight:400;color:var(--muted)">(inclusive, max 31 days)</span>
+        <input type="date" id="sync-errors-end-date"/>
+      </label>
+    </div>
+
+    <div class="oracle-actions" style="margin-top:12px">
+      <button type="button" class="run-btn" id="sync-errors-run-btn" style="width:auto;margin:0;padding:10px 24px">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 2.5l10 5.5-10 5.5V2.5z" fill="currentColor"/></svg>
+        Find Sync Errors
+      </button>
+    </div>
+    <div id="sync-errors-status" style="margin-top:10px;font-size:.78rem;color:var(--muted)"></div>
+    <div id="sync-errors-results" style="display:none;margin-top:20px"></div>
+  </div><!-- /mode-sync-errors -->
+
   <!-- ── Action: Pull Deployment Info ── -->
   <div class="action-card locked" id="mode-readiness">
     <div class="action-card-hdr">
-      <h2>🔎 Pull Deployment Info</h2>
+      <h2>Pull Deployment Info</h2>
       <p>Fetches Opera Cloud Version, Block Status Codes, Transaction Codes, Room Types, Hotel Info, and Rate Plans for one property — no pass/fail judgment, just what came back so you can review it yourself, with a full download for each.</p>
       <div class="action-card-lock-note" id="readiness-lock-note">Validate your credentials above to unlock this.</div>
     </div>
@@ -1129,7 +1152,7 @@
   <!-- ── Action: Hotel Stats (Revenue Inventory Statistics) ── -->
   <div class="action-card locked" id="mode-hotel-stats">
     <div class="action-card-hdr">
-      <h2>📊 Hotel Stats</h2>
+      <h2>Hotel Stats</h2>
       <p>Total physical/out-of-order rooms, rooms sold, room revenue, arrivals/departures/cancellations, and total revenue for a date range. Runs as a 3-step async OHIP job, so it can take longer than the other pulls.</p>
       <div class="action-card-lock-note" id="hotel-stats-lock-note">Validate your credentials above to unlock this.</div>
     </div>
@@ -1158,13 +1181,12 @@
   <!-- ── Action: DVA Results (shown as soon as a DVA is added; picks the focus date for Upload & Compare) ── -->
   <div class="action-card" id="mode-dva">
     <div class="action-card-hdr">
-      <h2>📊 DVA Results</h2>
+      <h2>DVA Results</h2>
       <p>Drop in the DVA to see which dates passed or failed, then pick a date to focus on — it sets the live API pull range below. The DVA is also used for accuracy scoring when you run Upload &amp; Compare.</p>
     </div>
     <div class="drop-grid" style="grid-template-columns:1fr;margin-bottom:0">
       <div class="drop-zone" id="zone-comp">
         <input type="file" id="file-comp" accept=".xlsx,.xls"/>
-        <span class="dz-icon">📊</span>
         <span class="dz-label">DVA File</span>
         <span class="dz-hint">.xlsx · Duetto Data Validation results</span>
         <div class="dz-filename" id="name-comp"></div>
@@ -1181,58 +1203,48 @@
 
   <!-- Upload section -->
   <div class="action-card-hdr">
-    <h2>🔍 Upload &amp; Compare</h2>
-    <p>Every file below is optional — upload whichever ones you have. If a DVA was added above, you get the full accuracy/discrepancy report; without one, you'll get whatever comparison the files you do upload support (e.g. Bookings vs. Arrivals, or a Folio variance check).</p>
+    <h2>Upload &amp; Compare</h2>
+    <p>Every file is optional. Add a DVA above for full accuracy scoring; without one you get whichever comparisons your files support.</p>
   </div>
   <div class="upload-card">
 
     <div class="drop-grid">
       <div class="drop-zone" id="zone-res">
         <input type="file" id="file-res" accept=".tsv,.csv,.txt"/>
-        <span class="dz-optional">Optional</span>
-        <span class="dz-icon">🛎️</span>
         <span class="dz-label">Bookings Report</span>
         <span class="dz-hint">.tsv / .csv · Duetto flat bookings export</span>
-        <span class="dz-unlocks">Unlocks: reservation-level root-cause &amp; Bookings-vs-Arrivals reconciliation</span>
+        <span class="dz-unlocks">Used for reservation-level root-cause &amp; Bookings-vs-Arrivals reconciliation</span>
         <div class="dz-filename" id="name-res"></div>
       </div>
 
       <div class="drop-zone" id="zone-folio">
         <input type="file" id="file-folio" accept=".tsv,.csv,.txt"/>
-        <span class="dz-optional">Optional</span>
-        <span class="dz-icon">🧾</span>
         <span class="dz-label">Folio Report</span>
         <span class="dz-hint">.tsv / .csv · Duetto flat folio export</span>
-        <span class="dz-unlocks">Unlocks: revenue root-causing via unmapped transaction codes</span>
+        <span class="dz-unlocks">Used for revenue root-causing via unmapped transaction codes</span>
         <div class="dz-filename" id="name-folio"></div>
       </div>
 
       <div class="drop-zone" id="zone-arrivals">
         <input type="file" id="file-arrivals" accept=".xml,.pdf,.txt"/>
-        <span class="dz-optional">Optional</span>
-        <span class="dz-icon">📋</span>
         <span class="dz-label">Arrival Details Report</span>
         <span class="dz-hint">.xml, .pdf or .txt · Opera arrivals export</span>
-        <span class="dz-unlocks">Unlocks: PMS sync-gap detection, rate mismatch checks &amp; Bookings-vs-Arrivals reconciliation</span>
+        <span class="dz-unlocks">Used for PMS sync-gap detection, rate mismatch checks &amp; Bookings-vs-Arrivals reconciliation</span>
         <div class="dz-filename" id="name-arrivals"></div>
       </div>
 
       <div class="drop-zone" id="zone-cashier-journal">
         <input type="file" id="file-cashier-journal" accept=".xlsx,.xls,.xml,.txt,.tsv,.csv"/>
-        <span class="dz-optional">Optional</span>
-        <span class="dz-icon">💵</span>
         <span class="dz-label">PMS Cashier Journal</span>
         <span class="dz-hint">.xlsx, .xml or .txt · Opera "Journal by Cashier and Transaction Code"</span>
-        <span class="dz-unlocks">Unlocks: transaction-level Folio variance vs. the PMS's own ledger (requires Folio Report above)</span>
+        <span class="dz-unlocks">Used for transaction-level Folio variance vs. the PMS's own ledger (requires Folio Report above)</span>
         <div class="dz-filename" id="name-cashier-journal"></div>
       </div>
 
       <div class="drop-zone" id="zone-api-folio-pull" style="cursor:default">
-        <span class="dz-optional">Optional</span>
-        <span class="dz-icon">📡</span>
         <span class="dz-label">Live API Folio Pull</span>
         <span class="dz-hint">Pulled directly from OHIP — not a file</span>
-        <span class="dz-unlocks">Unlocks: API vs. Duetto Folio Report bucket reconciliation, side-by-side (requires Folio Report above)</span>
+        <span class="dz-unlocks">Used for API vs. Duetto Folio Report bucket reconciliation, side-by-side (requires Folio Report above)</span>
         <div class="dz-filename" id="api-folio-pull-status"></div>
 
         <div style="margin-top:10px;text-align:left;width:100%">
@@ -1256,11 +1268,9 @@
       </div>
 
       <div class="drop-zone" id="zone-api-bookings-pull" style="cursor:default">
-        <span class="dz-optional">Optional</span>
-        <span class="dz-icon">📡</span>
         <span class="dz-label">Live API Bookings Pull</span>
         <span class="dz-hint">Pulled directly from OHIP — not a file</span>
-        <span class="dz-unlocks">Unlocks: API vs. Duetto Bookings Report reconciliation by confirmation #, side-by-side (requires Bookings Report above)</span>
+        <span class="dz-unlocks">Used for API vs. Duetto Bookings Report reconciliation by confirmation #, side-by-side (requires Bookings Report above)</span>
         <div class="dz-filename" id="api-bookings-pull-status"></div>
 
         <div style="margin-top:10px;text-align:left;width:100%">
@@ -1279,6 +1289,7 @@
           <button type="button" class="oracle-test-btn" id="api-bookings-pull-clear-btn" style="width:100%;margin-top:6px;display:none;background:transparent;color:#9B1C2E;border:1px solid var(--border-mid)">
             Clear Pulled Data
           </button>
+          <div id="api-bookings-ora-check"></div>
         </div>
       </div>
     </div>
@@ -1331,7 +1342,7 @@
       <div class="section-label">Overall Accuracy</div>
       <div class="accuracy-row">
         <div class="acc-card" id="card-rooms">
-          <div class="acc-icon">🛏️</div>
+          <div class="acc-icon"></div>
           <div>
             <div class="acc-label">Rooms Commit Accuracy</div>
             <div class="acc-value" id="val-rooms">—</div>
@@ -1339,7 +1350,7 @@
           </div>
         </div>
         <div class="acc-card" id="card-rev">
-          <div class="acc-icon">💰</div>
+          <div class="acc-icon"></div>
           <div>
             <div class="acc-label">Room Revenue Accuracy</div>
             <div class="acc-value" id="val-rev">—</div>
@@ -1347,7 +1358,7 @@
           </div>
         </div>
         <div class="acc-card" id="card-xref" style="display:none">
-          <div class="acc-icon">🔗</div>
+          <div class="acc-icon"></div>
           <div>
             <div class="acc-label">Bookings vs Arrivals</div>
             <div class="acc-value" id="val-xref">—</div>
@@ -1505,8 +1516,8 @@
     </div>
 
     <div id="modal-success-content" class="modal-success" style="display:none">
-      <div class="success-icon">✅</div>
-      <h3>Submitted!</h3>
+      
+      <h3>Submitted</h3>
       <p>Your analysis has been posted to the <strong>DQE Feedback</strong> board on Monday.com.</p>
       <div class="modal-actions" style="justify-content:center; margin-top:16px;">
         <button class="modal-cancel" onclick="closeMondayModal()">Close</button>
@@ -1585,12 +1596,13 @@
 
   function setLockedState(validated) {
     credentialsValidated = validated;
-    ['mode-browse', 'mode-readiness', 'mode-hotel-stats'].forEach(id => {
+    ['mode-browse', 'mode-sync-errors', 'mode-readiness', 'mode-hotel-stats'].forEach(id => {
       document.getElementById(id).classList.toggle('locked', !validated);
     });
     document.getElementById('browse-lock-note').style.display = validated ? 'none' : 'block';
     document.getElementById('readiness-lock-note').style.display = validated ? 'none' : 'block';
     document.getElementById('hotel-stats-lock-note').style.display = validated ? 'none' : 'block';
+    document.getElementById('sync-errors-lock-note').style.display = validated ? 'none' : 'block';
   }
 
   function setCredStatus(state, detail) {
@@ -1998,7 +2010,7 @@
       const btn = e.currentTarget;
       btn.disabled = true;
       const original = btn.textContent;
-      btn.textContent = '⏳ Building workbook…';
+      btn.textContent = 'Building workbook…';
       try {
         const resp = await fetch('/readiness_check/export', {
           method: 'POST',
@@ -2030,7 +2042,7 @@
     return setInterval(async () => {
       try {
         const p = await (await fetch(`/oracle_progress/${progressId}`)).json();
-        if (p.status === 'fetching') rowEl.textContent = `⏳ Fetching page ${p.page}… ${p.total_fetched} records so far`;
+        if (p.status === 'fetching') rowEl.textContent = `Fetching page ${p.page}… ${p.total_fetched} records so far`;
         else if (p.status === 'rate_limited') rowEl.textContent = `⚠ Rate limited — retrying with backoff…`;
         else if (p.status === 'done') rowEl.textContent = `✓ Fetch complete — ${p.total_fetched} records across ${p.page} page(s)`;
       } catch (e) { /* ignore transient poll errors */ }
@@ -2112,6 +2124,146 @@
   let _browseStartDate = '';
   let _browseEndDate = '';
 
+  // ══════════════ Sync Error Finder ══════════════
+  let _syncErrorsResult = null;
+  document.getElementById('sync-errors-run-btn').addEventListener('click', async () => {
+    const payload = getSharedCredentials();
+    payload.start_date = document.getElementById('sync-errors-start-date').value;
+    payload.end_date = document.getElementById('sync-errors-end-date').value || payload.start_date;
+    if (!payload.start_date) { alert('Select the start date of the failed job.'); return; }
+    const missing = ['hostname', 'hotel_id', 'app_key', 'client_id'].filter(k => !payload[k]);
+    if (missing.length) { alert('Missing required field(s): ' + missing.join(', ')); return; }
+
+    const btn = document.getElementById('sync-errors-run-btn');
+    const statusEl = document.getElementById('sync-errors-status');
+    const resultsEl = document.getElementById('sync-errors-results');
+    payload.progress_id = 'sync-' + Date.now();
+    btn.disabled = true;
+    resultsEl.style.display = 'none';
+    statusEl.textContent = 'Starting — each Daily Summary job is async and can take up to a minute…';
+    const poll = setInterval(async () => {
+      try {
+        const p = await (await fetch('/oracle_progress/' + payload.progress_id)).json();
+        if (p.status && p.status !== 'unknown') statusEl.textContent = p.status;
+      } catch (e) {}
+    }, 2000);
+
+    try {
+      const resp = await fetch('/sync_error_finder', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+      });
+      const data = await resp.json();
+      if (data.error) { statusEl.textContent = ''; alert('Error: ' + data.error); return; }
+      statusEl.textContent = `Checked ${escHtml(payload.hotel_id)} · ${payload.start_date} → ${payload.end_date} · ${data.jobs_run} Daily Summary job(s) run.`;
+      _syncErrorsResult = { ...data, hotel_id: payload.hotel_id };
+      renderSyncErrors(_syncErrorsResult);
+      logUsage('Sync Error Finder', payload.hotel_id);
+    } catch (e) {
+      statusEl.textContent = '';
+      alert('Fetch error: ' + e.message);
+    } finally {
+      clearInterval(poll);
+      btn.disabled = false;
+    }
+  });
+
+  function syncHitsTable(hits) {
+    return `<div style="overflow-x:auto"><table class="rule-codes-table">
+      <thead><tr><th>Confirmation #</th><th>Field</th><th>Character(s)</th><th>Value</th></tr></thead>
+      <tbody>${hits.map(h => `<tr><td>${escHtml(h.confirmation_no)}</td><td>${escHtml(h.field)}</td>
+        <td><code>${escHtml(h.characters)}</code></td><td>${escHtml(h.value)}</td></tr>`).join('')}</tbody>
+    </table></div>`;
+  }
+
+  function renderSyncErrors(r) {
+    const el = document.getElementById('sync-errors-results');
+    el.style.display = 'block';
+    if (!r.reproduced) {
+      el.innerHTML = `
+        <div class="section-label">Result</div>
+        <p style="font-size:.85rem"><span class="badge match">✓ No error reproduced</span>
+          Opera returned the Daily Summary normally (${r.reservation_count} reservations).
+          If Duetto's job failed for this range, it may have been fixed since, or the failure was on a different date range.</p>
+        ${r.risk_hits.length
+          ? `<p style="font-size:.8rem;margin-top:10px">⚠ ${r.risk_hits.length} field(s) still contain characters that cause ORA-02290 — worth fixing before they fail a future sync:</p>${syncHitsTable(r.risk_hits)}`
+          : '<p style="font-size:.78rem;color:var(--muted)">No ORA-02290 risk characters found in the returned data.</p>'}`;
+      return;
+    }
+
+    const dayStrip = r.days.map(d => `<span style="display:inline-block;margin:2px;padding:3px 8px;border-radius:6px;font-size:.72rem;
+      background:${d.failed ? 'rgba(155,28,46,.1)' : 'var(--bg)'};color:${d.failed ? '#9B1C2E' : 'var(--muted)'}">
+      ${escHtml(d.date.slice(5))} ${d.failed ? '✗' : '✓'}</span>`).join('');
+
+    const dayBlocks = r.failing_days.map(f => {
+      let body;
+      if (f.ora === 'ORA-01722') {
+        body = `<p style="font-size:.78rem;color:var(--muted)">The exact Room Category field isn't identified yet — compare the room values below and look for the odd one out.</p>
+          <div style="overflow-x:auto"><table class="rule-codes-table"><thead><tr><th>Confirmation #</th><th>Room Type</th><th>Room Class</th><th>Room Type Charged</th></tr></thead>
+          <tbody>${(f.room_fields || []).map(x => `<tr><td>${escHtml(x.confirmation_no)}</td><td>${escHtml(x.roomType)}</td><td>${escHtml(x.roomClass)}</td><td>${escHtml(x.roomTypeCharged)}</td></tr>`).join('')}</tbody></table></div>`;
+      } else if (f.hits && f.hits.length) {
+        body = syncHitsTable(f.hits);
+      } else {
+        body = `<p style="font-size:.78rem;color:var(--muted)">No bad characters found in the fields DQE can see. Likely a Membership Card Number or another profile field not returned by the reservations API — check the profiles on this day's reservations in Opera.</p>`;
+      }
+      return `<div style="margin-top:14px"><div style="font-weight:600;font-size:.82rem;margin-bottom:6px">${escHtml(f.date)} · ${escHtml(f.ora || 'Error')}</div>${body}</div>`;
+    }).join('');
+
+    el.innerHTML = `
+      <div class="section-label">Result</div>
+      <p style="font-size:.85rem"><span class="badge over">✗ ${escHtml(r.ora || 'Error')} reproduced</span> ${escHtml(r.explanation)}</p>
+      <details style="margin:10px 0"><summary style="cursor:pointer;font-size:.78rem;font-weight:600">Raw error from Opera</summary>
+        <pre style="white-space:pre-wrap;font-size:.72rem;background:var(--bg);padding:10px;border-radius:8px">${escHtml(r.error_raw)}</pre></details>
+      <div style="margin:12px 0">${dayStrip}</div>
+      ${dayBlocks}
+      <div style="display:flex;gap:8px;margin-top:16px">
+        <button type="button" class="oracle-test-btn" onclick="copySyncErrorsForCase()" style="background:transparent;color:var(--duetto-dark);border:1px solid var(--border-mid)">Copy for case</button>
+        <button type="button" class="oracle-test-btn" onclick="downloadSyncErrors()" style="background:transparent;color:var(--duetto-dark);border:1px solid var(--border-mid)">Download CSV</button>
+      </div>
+      <p style="font-size:.74rem;color:var(--muted);margin-top:10px">Next step: future reservations/profiles — hotel corrects the value in Opera. Past reservations — escalate to Oracle Support for the fix script. Then re-run here to confirm and request a resync.</p>`;
+  }
+
+  function _syncErrorRows() {
+    const r = _syncErrorsResult;
+    return (r.failing_days || []).flatMap(f => (f.hits || []).map(h => ({ date: f.date, ora: f.ora, ...h })));
+  }
+
+  function copySyncErrorsForCase() {
+    const r = _syncErrorsResult;
+    const lines = [`Sync Error Finder — ${r.hotel_id}`, `${r.ora}: ${r.explanation}`,
+      `Failing date(s): ${r.failing_days.map(f => f.date).join(', ')}`];
+    _syncErrorRows().forEach(h => lines.push(`${h.date} · Conf ${h.confirmation_no} · ${h.field} · "${h.characters}" · ${h.value}`));
+    lines.push('', 'Raw error:', r.error_raw);
+    navigator.clipboard.writeText(lines.join('\n'));
+  }
+
+  function downloadSyncErrors() {
+    downloadDelimited(_syncErrorRows(), ['date', 'ora', 'confirmation_no', 'field', 'characters', 'value'],
+      `dqe_sync_errors_${_syncErrorsResult.hotel_id}`, ',', 'csv', 'text/csv');
+  }
+
+  function renderOra02290(el, hits) {
+    if (!el) return;
+    if (!hits) { el.innerHTML = ''; return; }
+    if (!hits.length) {
+      el.innerHTML = '<p style="font-size:.72rem;color:var(--muted);margin:8px 0">✓ ORA-02290 check: no unsupported characters found.</p>';
+      return;
+    }
+    el.innerHTML = `
+      <details style="margin:10px 0;padding:10px 12px;border:1px solid #F0C36D;border-radius:8px;background:#FFF8E6;font-size:.75rem;text-align:left">
+        <summary style="cursor:pointer;font-weight:600;color:#8A5A00">⚠ ORA-02290 risk: ${hits.length} field(s) contain characters OHIP can't send to Duetto</summary>
+        <p style="margin:8px 0;color:var(--muted)">Characters " | \\ / [ ] in these fields fail the OHIP → Duetto exchange (Oracle HOPCS-66495 / HOPCS-76689). Fix the value in Opera; past reservations may need an Oracle Support script.</p>
+        <div style="overflow-x:auto"><table class="rule-codes-table">
+          <thead><tr><th>Confirmation #</th><th>Field</th><th>Character(s)</th><th>Value</th></tr></thead>
+          <tbody>${hits.map(h => `<tr>
+            <td>${escHtml(h.confirmation_no)}</td>
+            <td>${escHtml(h.field)}</td>
+            <td><code>${escHtml(h.characters)}</code></td>
+            <td>${escHtml(h.value)}</td>
+          </tr>`).join('')}</tbody>
+        </table></div>
+      </details>`;
+  }
+
   function renderBrowseResults(data) {
     _browseRecords = data.records || [];
     _browseAllColumns = data.all_columns || [];
@@ -2119,6 +2271,7 @@
     _browseColumnLabels = data.column_labels || {};
     _browseShowAllFields = false;
     _browseDataType = data.data_type || '';
+    renderOra02290(document.getElementById('browse-ora-check'), data.ora_02290);
 
     document.getElementById('browse-results').style.display = 'block';
     document.getElementById('browse-search').value = '';
@@ -2277,7 +2430,7 @@
     }
     const btn = document.getElementById('api-folio-pull-btn');
     btn.disabled = true;
-    btn.textContent = '⏳ Pulling…';
+    btn.textContent = 'Pulling…';
     try {
       const resp = await fetch('/browse_oracle', {
         method: 'POST',
@@ -2313,6 +2466,7 @@
 
   document.getElementById('api-bookings-pull-clear-btn').addEventListener('click', () => {
     _lastBookingsPull = null;
+    renderOra02290(document.getElementById('api-bookings-ora-check'), null);
     document.getElementById('api-bookings-pull-status').textContent = '';
     document.getElementById('api-bookings-pull-status').className = 'dz-filename';
     document.getElementById('zone-api-bookings-pull').classList.remove('has-file');
@@ -2336,7 +2490,7 @@
     }
     const btn = document.getElementById('api-bookings-pull-btn');
     btn.disabled = true;
-    btn.textContent = '⏳ Pulling…';
+    btn.textContent = 'Pulling…';
     try {
       const resp = await fetch('/browse_oracle', {
         method: 'POST',
@@ -2348,6 +2502,7 @@
       btn.textContent = 'Pull Live Data Now';
       if (data.error) { alert('Error: ' + data.error); return; }
       setLastBookingsPull(data.records || [], startDate, endDate);
+      renderOra02290(document.getElementById('api-bookings-ora-check'), data.ora_02290);
     } catch (e) {
       btn.disabled = false;
       btn.textContent = 'Pull Live Data Now';
@@ -2683,7 +2838,7 @@
 
     if (!data.discrepancies.length) {
       tbody.innerHTML = `<tr><td colspan="17" style="text-align:center;padding:32px;color:var(--muted);">
-        <div style="font-size:1.5rem;margin-bottom:8px">🎉</div>No discrepancies found in the scoped date range.</td></tr>`;
+        No discrepancies found in the scoped date range.</td></tr>`;
     } else {
       data.discrepancies.forEach(d => {
         const hasRoomFail = Math.abs(d.RoomDiff) > 0;
@@ -2846,7 +3001,7 @@
       <div class="accuracy-row">
         <div class="acc-card"><div class="acc-icon">✓</div><div><div class="acc-label">Matched Transactions</div><div class="acc-value">${v.matched_count}</div></div></div>
         <div class="acc-card"><div class="acc-icon">⚠</div><div><div class="acc-label">Amount/Code Mismatches</div><div class="acc-value">${v.mismatch_count}</div></div></div>
-        <div class="acc-card"><div class="acc-icon">❓</div><div><div class="acc-label">Missing Somewhere</div><div class="acc-value">${v.missing_from_journal_count + v.missing_from_duetto_count}</div></div></div>
+        <div class="acc-card"><div class="acc-icon"></div><div><div class="acc-label">Missing Somewhere</div><div class="acc-value">${v.missing_from_journal_count + v.missing_from_duetto_count}</div></div></div>
       </div>
       ${section('Amount / Code Mismatches', v.mismatches, [
         ['Transaction ID', r => r.transaction_id], ['Stay Date', r => r.stay_date],
@@ -2917,7 +3072,7 @@
       <div class="accuracy-row">
         <div class="acc-card"><div class="acc-icon">✓</div><div><div class="acc-label">Matched Buckets</div><div class="acc-value">${v.matched_count}</div></div></div>
         <div class="acc-card"><div class="acc-icon">⚠</div><div><div class="acc-label">Amount Mismatches</div><div class="acc-value">${v.mismatch_count}</div></div></div>
-        <div class="acc-card"><div class="acc-icon">❓</div><div><div class="acc-label">Missing Somewhere</div><div class="acc-value">${v.api_only_count + v.duetto_only_count}</div></div></div>
+        <div class="acc-card"><div class="acc-icon"></div><div><div class="acc-label">Missing Somewhere</div><div class="acc-value">${v.api_only_count + v.duetto_only_count}</div></div></div>
       </div>
       <div class="disc-search-row" style="justify-content:space-between;margin-top:20px">
         <div class="section-label" style="margin:0">Side-by-Side by Day + Transaction Code <span style="font-weight:400;color:var(--muted);text-transform:none;letter-spacing:0">(${rows.length} — includes matches)</span></div>
@@ -3009,8 +3164,8 @@
     content.innerHTML = `
       <div class="section-label">Live Opera Reservations vs. Duetto Bookings Report <span style="font-weight:400;color:var(--muted);text-transform:none;letter-spacing:0">(matched by confirmation #)</span></div>
       <div class="accuracy-row">
-        ${tile('🏨', 'Duetto Rooms', v.duetto_total_rooms)}
-        ${tile('🏨', 'Opera Rooms', v.opera_total_rooms)}
+        ${tile('', 'Duetto Rooms', v.duetto_total_rooms)}
+        ${tile('', 'Opera Rooms', v.opera_total_rooms)}
         ${tile(v.room_diff ? '⚠' : '✓', 'Room Difference', (v.room_diff > 0 ? '+' : '') + v.room_diff)}
         ${tile('✓', 'Matched Reservations', c.matched || 0)}
         ${tile(v.issue_count ? '⚠' : '✓', 'Reservations to Review', v.issue_count)}
@@ -3053,10 +3208,10 @@
     document.getElementById('dva-content').innerHTML = `
       <div class="section-label">DVA Results${_dvaHotel ? ' — ' + escHtml(_dvaHotel) : ''} <span style="font-weight:400;color:var(--muted);text-transform:none;letter-spacing:0">(TOTAL section)</span></div>
       <div class="accuracy-row compact">
-        <div class="acc-card"><div class="acc-icon">📅</div><div><div class="acc-label">Dates in DVA</div><div class="acc-value">${rows.length}</div></div></div>
+        <div class="acc-card"><div class="acc-icon"></div><div><div class="acc-label">Dates in DVA</div><div class="acc-value">${rows.length}</div></div></div>
         <div class="acc-card"><div class="acc-icon">${failed.length ? '⚠' : '✓'}</div><div><div class="acc-label">Failed Dates</div><div class="acc-value">${failed.length}</div></div></div>
-        <div class="acc-card"><div class="acc-icon">🏨</div><div><div class="acc-label">Rooms Fails</div><div class="acc-value">${rows.filter(r => r.commit_status === 'FAIL').length}</div></div></div>
-        <div class="acc-card"><div class="acc-icon">💲</div><div><div class="acc-label">Revenue Fails</div><div class="acc-value">${rows.filter(r => r.revenue_status === 'FAIL').length}</div></div></div>
+        <div class="acc-card"><div class="acc-icon"></div><div><div class="acc-label">Rooms Fails</div><div class="acc-value">${rows.filter(r => r.commit_status === 'FAIL').length}</div></div></div>
+        <div class="acc-card"><div class="acc-icon"></div><div><div class="acc-label">Revenue Fails</div><div class="acc-value">${rows.filter(r => r.revenue_status === 'FAIL').length}</div></div></div>
       </div>
       <div class="disc-search-row" style="justify-content:space-between;margin-top:20px">
         <div style="display:flex;gap:8px">

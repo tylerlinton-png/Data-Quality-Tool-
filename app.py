@@ -1702,6 +1702,176 @@ def run_hotel_stats(hostname, access_token, app_key, hotel_id, ext_system_code, 
     return get_hotel_stats_result(job_url, access_token, app_key, hotel_id)
 
 
+# ── Sync Error Finder ────────────────────────────────────────────────────────
+# Reproduces the Async Reservations Daily Summary call Duetto's integration
+# runs (from the team's Postman collection), narrows a failing range down to
+# the failing day(s), then finds the record(s) behind the error.
+SYNC_JOB_POLL_INTERVAL = 3
+SYNC_JOB_POLL_TIMEOUT = 240
+SYNC_FINDER_MAX_DAYS = 31
+SYNC_FINDER_KNOWN_ERRORS = {
+    'ORA-02290': 'Unsupported special character ( " | \\ / [ ] ) in a reservation or profile field.',
+    'ORA-01722': 'A Room Category holds an alpha-numeric value where Opera expects a number.',
+}
+ORA_01722_ROOM_FIELDS = ['roomStay.roomType', 'roomStay.roomClass', 'roomStay.roomTypeCharged']
+
+
+def _ohip_async_request(url, method, access_token, app_key, hotel_id, body=None):
+    req = urllib.request.Request(url, data=json.dumps(body).encode() if body else None, method=method)
+    req.add_header('Content-Type', 'application/json')
+    req.add_header('x-app-key', app_key.strip())
+    req.add_header('x-hotelId', hotel_id)
+    req.add_header('Authorization', f'Bearer {access_token}')
+    try:
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            return resp.status, resp.headers, resp.read()
+    except urllib.error.HTTPError as e:
+        return e.code, e.headers, e.read()
+
+
+def run_reservation_daily_summary(hostname, access_token, app_key, hotel_id, ext_system_code, start_date, end_date):
+    """
+    One Async Daily Summary job (POST → HEAD poll → GET). Returns
+    {'ok': True, 'reservations': [...]} or {'ok': False, 'error_raw': str, 'ora': code}.
+    """
+    import time as _time
+    hotel_id = hotel_id.strip().upper()
+    base = (hostname if hostname.startswith('https://') else f'https://{hostname}').rstrip('/')
+    url = f'{base}/rsv/async/v1/externalSystems/{ext_system_code}/hotels/{hotel_id}/reservations/dailySummary'
+    body = {'criteria': {'hotelId': hotel_id, 'timeSpan': {'startDate': start_date, 'endDate': end_date}}}
+
+    def _failed(raw):
+        text = raw.decode(errors='replace') if isinstance(raw, bytes) else str(raw)
+        m = re.search(r'ORA-\d{5}', text)
+        return {'ok': False, 'error_raw': text, 'ora': m.group(0) if m else None}
+
+    status, headers, raw = _ohip_async_request(url, 'POST', access_token, app_key, hotel_id, body)
+    job_url = headers.get('Location')
+    if status >= 400 or not job_url:
+        return _failed(raw or f'HTTP {status} starting the job')
+
+    elapsed = 0
+    while True:
+        status, headers, raw = _ohip_async_request(job_url, 'HEAD', access_token, app_key, hotel_id)
+        job_status = (headers.get('status') or '').upper()
+        if status >= 400 or job_status not in ('', 'PROCESSING', 'PENDING', 'INPROGRESS', 'COMPLETED'):
+            break
+        if job_status == 'COMPLETED':
+            job_url = headers.get('Location') or job_url
+            break
+        if elapsed >= SYNC_JOB_POLL_TIMEOUT:
+            raise TimeoutError(f'Daily Summary job for {start_date}–{end_date} did not finish within {SYNC_JOB_POLL_TIMEOUT}s.')
+        _time.sleep(SYNC_JOB_POLL_INTERVAL)
+        elapsed += SYNC_JOB_POLL_INTERVAL
+
+    status, headers, raw = _ohip_async_request(job_url, 'GET', access_token, app_key, hotel_id)
+    if status >= 400:
+        return _failed(raw)
+    try:
+        payload = json.loads(raw.decode())
+    except ValueError:
+        return _failed(raw)
+    if not isinstance(payload, dict) or payload.get('o:errorCode') or 'reservations' not in payload:
+        return _failed(raw)
+    return {'ok': True, 'reservations': payload['reservations']}
+
+
+def _daily_summary_risk_fields(rec):
+    """ORA-02290 field check on the Daily Summary payload, which uses Oracle's own field names."""
+    for ref in rec.get('externalReferences') or []:
+        yield 'External Reference', ref.get('id')
+    for key, label in (('blockCode', 'Block Code'), ('guestCountry', 'Guest Country Name'),
+                       ('travelAgentName', 'Travel Agent Name'), ('companyName', 'Company Name'),
+                       ('sourceName', 'Source Name'), ('resvContactName', 'Reservation Contact Name')):
+        yield label, rec.get(key)
+    for path, value in _iter_string_fields(rec):
+        if 'membership' in path.lower():
+            yield 'Membership Card Number', value
+
+
+def check_daily_summary_ora_02290(reservations):
+    hits = []
+    for rec in reservations:
+        conf = _prep_reservation_for_display(rec).get('_confirmationNo', '')
+        for field, value in _daily_summary_risk_fields(rec):
+            if isinstance(value, str):
+                chars = sorted(set(ORA_02290_CHARS.findall(value)))
+                if chars:
+                    hits.append({'confirmation_no': conf, 'field': field, 'value': value, 'characters': ' '.join(chars)})
+    return hits
+
+
+def run_sync_error_finder(hostname, access_token, app_key, enterprise_id, hotel_id, ext_system_code,
+                          start_date, end_date, report=lambda msg: None):
+    start = datetime.date.fromisoformat(start_date)
+    end = datetime.date.fromisoformat(end_date)
+    if end < start:
+        raise ValueError('End date is before start date.')
+    if (end - start).days + 1 > SYNC_FINDER_MAX_DAYS:
+        raise ValueError(f'Pick a range of {SYNC_FINDER_MAX_DAYS} days or less.')
+
+    jobs = {'n': 0}
+
+    def job(s, e):
+        jobs['n'] += 1
+        report(f'Running Daily Summary job {jobs["n"]} ({s} → {e})…')
+        return run_reservation_daily_summary(hostname, access_token, app_key, hotel_id, ext_system_code, s.isoformat(), e.isoformat())
+
+    full = job(start, end)
+    if full['ok']:
+        return {
+            'reproduced': False,
+            'jobs_run': jobs['n'],
+            'reservation_count': len(full['reservations']),
+            'risk_hits': check_daily_summary_ora_02290(full['reservations']),
+        }
+
+    # Halve the range until each failing piece is a single day.
+    day_results = {}
+    pending = [(start, end, full)]
+    while pending:
+        s, e, res = pending.pop()
+        if res['ok']:
+            d = s
+            while d <= e:
+                day_results[d] = None
+                d += datetime.timedelta(days=1)
+            continue
+        if s == e:
+            day_results[s] = res
+            continue
+        mid = s + datetime.timedelta(days=(e - s).days // 2)
+        pending.append((s, mid, job(s, mid)))
+        pending.append((mid + datetime.timedelta(days=1), e, job(mid + datetime.timedelta(days=1), e)))
+
+    failing_days = []
+    for day in sorted(d for d, r in day_results.items() if r):
+        res = day_results[day]
+        report(f'Checking reservations on {day}…')
+        raw = fetch_oracle_raw('reservations', hostname, access_token, app_key, enterprise_id, hotel_id,
+                               day.isoformat(), day.isoformat(), ext_system_code=ext_system_code)
+        entry = {'date': day.isoformat(), 'ora': res['ora'], 'error_raw': res['error_raw']}
+        if res['ora'] == 'ORA-01722':
+            rows, _, _ = format_records_for_display('reservations', raw)
+            entry['room_fields'] = [{
+                'confirmation_no': r.get('_confirmationNo', ''),
+                **{f.split('.')[-1]: r.get(f, '') for f in ORA_01722_ROOM_FIELDS},
+            } for r in rows]
+        else:
+            entry['hits'] = check_ora_02290(raw)
+        failing_days.append(entry)
+
+    return {
+        'reproduced': True,
+        'jobs_run': jobs['n'],
+        'ora': full['ora'],
+        'explanation': SYNC_FINDER_KNOWN_ERRORS.get(full['ora'], 'Opera rejected the Daily Summary request.'),
+        'error_raw': full['error_raw'],
+        'days': [{'date': d.isoformat(), 'failed': bool(r)} for d, r in sorted(day_results.items())],
+        'failing_days': failing_days,
+    }
+
+
 def _prep_reservation_for_display(rec):
     """
     Inject a synthetic, human confirmation number field before flattening.
@@ -1747,6 +1917,73 @@ def enrich_folio_transaction_names(records, hostname, access_token, app_key, ent
         if code and code in name_by_code:
             r['transactionCodeName'] = name_by_code[code]
     return records
+
+
+# Characters OHIP can't carry in its JSON messages to Duetto — reservations
+# containing them fail with ORA-02290 (Duetto KB "OHIP Common Connection Errors").
+ORA_02290_CHARS = re.compile(r'["|\\/\[\]]')
+_ORA_SCAN_SKIP_KEYS = {'links', 'href', '_confirmationNo'}
+
+
+def _iter_string_fields(obj, path=''):
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            if k not in _ORA_SCAN_SKIP_KEYS:
+                yield from _iter_string_fields(v, f'{path}.{k}' if path else k)
+    elif isinstance(obj, list):
+        for v in obj:
+            yield from _iter_string_fields(v, path)
+    elif isinstance(obj, str):
+        yield path, obj
+
+
+# Fields Oracle lists as triggering ORA-02290 (HOPCS-66495, fixed 23.5.7.0 for new
+# data; HOPCS-76689 membership, fixed 25.1.3). Past data can still be affected.
+ORA_02290_PROFILE_FIELDS = {
+    'TravelAgent': 'Travel Agent Name',
+    'Company': 'Company Name',
+    'Source': 'Source Name',
+    'ReservationContact': 'Reservation Contact Name',
+}
+
+
+def _ora_02290_fields(rec):
+    for ref in rec.get('externalReferences') or []:
+        yield 'External Reference', ref.get('id')
+    block = (rec.get('roomStay') or {}).get('reservationBlock') or {}
+    for b in block.get('blockIdList') or []:
+        if b.get('type') == 'BlockCode':
+            yield 'Block Code', b.get('id')
+    country = ((rec.get('reservationGuest') or {}).get('address') or {}).get('country') or {}
+    for v in country.values():
+        yield 'Guest Country Name', v
+    for p in rec.get('attachedProfiles') or []:
+        label = ORA_02290_PROFILE_FIELDS.get(p.get('reservationProfileType'))
+        if label:
+            yield label, p.get('name')
+    yield 'Source Name', (rec.get('roomStay') or {}).get('sourceCodeDescription')
+    for path, value in _iter_string_fields(rec):
+        if 'membership' in path.lower():
+            yield 'Membership Card Number', value
+
+
+def check_ora_02290(raw_reservations):
+    """One row per Oracle-listed field holding a character OHIP rejects (ORA-02290)."""
+    hits = []
+    for rec in raw_reservations:
+        rec = _prep_reservation_for_display(rec)
+        for field, value in _ora_02290_fields(rec):
+            if not isinstance(value, str):
+                continue
+            chars = sorted(set(ORA_02290_CHARS.findall(value)))
+            if chars:
+                hits.append({
+                    'confirmation_no': rec.get('_confirmationNo', ''),
+                    'field': field,
+                    'value': value,
+                    'characters': ' '.join(chars),
+                })
+    return hits
 
 
 def format_records_for_display(data_type, records):
@@ -3056,6 +3293,7 @@ def browse_oracle():
         'preferred_columns': preferred_columns,
         'all_columns': all_columns,
         'column_labels': column_labels,
+        'ora_02290': check_ora_02290(records) if data_type == 'reservations' else None,
     })
 
 
@@ -3386,6 +3624,53 @@ def readiness_check_export():
     return jsonify({'xlsx_b64': base64.b64encode(xlsx_bytes).decode()})
 
 
+@app.route('/sync_error_finder', methods=['POST'])
+def sync_error_finder():
+    body = dict(request.get_json(force=True) or {})
+    hotel_id = (body.get('hotel_id') or '').strip()
+    environment = body.get('environment') or 'prod'
+    progress_id = body.get('progress_id')
+
+    if hotel_id and not body.get('client_secret'):
+        saved = get_oracle_credentials(hotel_id, environment)
+        if saved:
+            for k in ('hostname', 'client_id', 'client_secret', 'app_key', 'enterprise_id'):
+                if not body.get(k):
+                    body[k] = saved.get(k, '')
+
+    required = ['hostname', 'client_id', 'client_secret', 'app_key', 'hotel_id', 'start_date', 'end_date']
+    missing = [f for f in required if not body.get(f)]
+    if missing:
+        return jsonify({'error': f'Missing required field(s): {", ".join(missing)}'}), 400
+
+    token, err = get_oracle_oauth_token(
+        body['hostname'], body['client_id'], body['client_secret'], body['app_key'],
+        enterprise_id=body.get('enterprise_id'), auth_type=body.get('auth_type', 'ocim'),
+        username=body.get('username'), password=body.get('password'),
+    )
+    if not token:
+        return jsonify({'error': f'OAuth error: {err}'}), 400
+
+    def report(msg):
+        if progress_id:
+            _oracle_progress[progress_id] = {'status': msg}
+            while len(_oracle_progress) > _ORACLE_PROGRESS_MAX:
+                _oracle_progress.pop(next(iter(_oracle_progress)))
+
+    try:
+        result = run_sync_error_finder(
+            body['hostname'], token, body['app_key'], body.get('enterprise_id'), hotel_id,
+            body.get('ext_system_code') or 'DUETTO1', body['start_date'], body['end_date'], report=report,
+        )
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+    except Exception as e:
+        return jsonify({'error': f'Sync Error Finder failed: {e}'}), 502
+    finally:
+        _oracle_progress.pop(progress_id, None)
+    return jsonify(result)
+
+
 @app.route('/hotel_stats', methods=['POST'])
 def hotel_stats():
     """
@@ -3539,7 +3824,7 @@ MONDAY_USAGE_COLS = {
     'hotel_id':  'text_mm6kv8t',
     'timestamp': 'date_mm6kejk6',
 }
-MONDAY_USAGE_TEAMS = {'DQE', 'Deployment', 'Migrations', 'Other'}
+MONDAY_USAGE_TEAMS = {'DQE', 'Deployment', 'Migrations', 'Support', 'Other'}
 
 
 def _post_usage_event(team_label, action, hotel_id):
@@ -3554,7 +3839,7 @@ def _post_usage_event(team_label, action, hotel_id):
     }
     mutation = """
     mutation ($board: ID!, $name: String!, $cols: JSON!) {
-      create_item(board_id: $board, item_name: $name, column_values: $cols) { id }
+      create_item(board_id: $board, item_name: $name, column_values: $cols, create_labels_if_missing: true) { id }
     }
     """
     try:
