@@ -1905,6 +1905,10 @@ def run_sync_error_finder(hostname, access_token, app_key, enterprise_id, hotel_
 
     return {
         'reproduced': True,
+        'request': {
+            'endpoint': f'POST /rsv/async/v1/externalSystems/{ext_system_code}/hotels/{hotel_id.strip().upper()}/reservations/dailySummary',
+            'ext_system_code': ext_system_code,
+        },
         'jobs_run': jobs['n'],
         'ora': full['ora'],
         'explanation': SYNC_FINDER_KNOWN_ERRORS.get(full['ora'], 'Opera rejected the Daily Summary request.'),

@@ -2203,7 +2203,7 @@
         body = `<p style="font-size:.8rem">These reservations use a room type code that isn't configured at the hotel:</p>${syncHitsTable(f.hits)}`;
       } else if (f.ora === 'ORA-01722') {
         body = `<p style="font-size:.8rem">Opera found a reservation row with a <strong>non-numeric Room Category</strong> on this date. The API only returns the room type code, not the Room Category value, so DQE can't read it directly (in a past case the value was "PSE").</p>
-          <p style="font-size:.8rem;margin-top:6px">Escalate to Oracle Support: hotel ${escHtml(_syncErrorsResult.hotel_id)}, failing date ${escHtml(f.date)}, Async Daily Summary returns ORA-01722. Reference KA DOC12856 / HOPCS-62399 and ask them to find and correct the non-numeric Room Category row for this date.</p>
+          <p style="font-size:.8rem;margin-top:6px">Escalate to Oracle Support: hotel ${escHtml(_syncErrorsResult.hotel_id)}, failing date ${escHtml(f.date)}, Async Daily Summary returns ORA-01722. Ask them to identify and correct the non-numeric Room Category row (ref KA DOC12856). <strong>Copy for case</strong> includes the exact request to reproduce it.</p>
           <details style="margin-top:8px"><summary style="cursor:pointer;font-size:.78rem">Room values on this day</summary>
           <div style="overflow-x:auto"><table class="rule-codes-table"><thead><tr><th>Confirmation #</th><th>Room Type</th><th>Room Class</th><th>Room Type Charged</th></tr></thead>
           <tbody>${(f.room_fields || []).map(x => `<tr><td>${escHtml(x.confirmation_no)}</td><td>${escHtml(x.roomType)}</td><td>${escHtml(x.roomClass)}</td><td>${escHtml(x.roomTypeCharged)}</td></tr>`).join('')}</tbody></table></div></details>`;
@@ -2236,11 +2236,19 @@
 
   function copySyncErrorsForCase() {
     const r = _syncErrorsResult;
-    const lines = [`Sync Error Finder — ${r.hotel_id}`, `${r.ora}: ${r.explanation}`,
-      `Failing date(s): ${r.failing_days.map(f => f.date).join(', ')}`];
+    const days = r.failing_days.map(f => f.date);
+    const lines = [`Hotel: ${r.hotel_id}`, `Error: ${r.ora} on the OHIP Async Reservations Daily Summary`,
+      `Failing date(s): ${days.join(', ')}`, ''];
     _syncErrorRows().forEach(h => lines.push(`${h.date} · Conf ${h.confirmation_no} · ${h.field} · "${h.characters}" · ${h.value}`));
-    if (r.ora === 'ORA-01722') lines.push('Cause: a reservation row with a non-numeric Room Category on this date. Ref KA DOC12856 / HOPCS-62399 — please identify and correct the row.');
-    lines.push('', 'Raw error:', r.error_raw);
+    if (r.ora === 'ORA-01722') {
+      lines.push('Cause: a reservation row with a non-numeric Room Category on the failing date.',
+        'Ask: please identify and correct the row (ref KA DOC12856; related bug HOPCS-62399).');
+    } else if (r.ora === 'ORA-02290') {
+      lines.push('Cause: unsupported special characters ( " | \\ / [ ] ) in the fields above (ref HOPCS-66495 / HOPCS-76689).');
+    }
+    lines.push('', 'Request to reproduce (one per failing date):', r.request ? r.request.endpoint : '');
+    days.forEach(d => lines.push(JSON.stringify({ criteria: { hotelId: r.hotel_id, timeSpan: { startDate: d, endDate: d } } })));
+    lines.push('', 'Response:', r.error_raw);
     navigator.clipboard.writeText(lines.join('\n'));
   }
 
