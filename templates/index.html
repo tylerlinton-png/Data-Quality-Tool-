@@ -2202,7 +2202,7 @@
       } else if (f.ora === 'ORA-01722' && f.hits && f.hits.length) {
         body = `<p style="font-size:.8rem">These reservations use a room type code that isn't configured at the hotel:</p>${syncHitsTable(f.hits)}`;
       } else if (f.ora === 'ORA-01722') {
-        body = `<p style="font-size:.8rem">Opera found a reservation row with a <strong>non-numeric Room Category</strong>. It isn't visible through the API — in a past case the value was "PSE" on a PM reservation that had since been deleted.</p>
+        body = `<p style="font-size:.8rem">Opera found a reservation row with a <strong>non-numeric Room Category</strong> on this date. The API only returns the room type code, not the Room Category value, so DQE can't read it directly (in a past case the value was "PSE").</p>
           <p style="font-size:.8rem;margin-top:6px">Escalate to Oracle Support: hotel ${escHtml(_syncErrorsResult.hotel_id)}, failing date ${escHtml(f.date)}, Async Daily Summary returns ORA-01722. Reference KA DOC12856 / HOPCS-62399 and ask them to find and correct the non-numeric Room Category row for this date.</p>
           <details style="margin-top:8px"><summary style="cursor:pointer;font-size:.78rem">Room values on this day</summary>
           <div style="overflow-x:auto"><table class="rule-codes-table"><thead><tr><th>Confirmation #</th><th>Room Type</th><th>Room Class</th><th>Room Type Charged</th></tr></thead>
